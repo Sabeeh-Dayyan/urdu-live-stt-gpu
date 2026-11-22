@@ -1,0 +1,1484 @@
+{
+ "uid": "live-stt",
+ "title": "Live STT",
+ "schemaVersion": 39,
+ "version": 4,
+ "refresh": "5s",
+ "time": {
+  "from": "now-30m",
+  "to": "now"
+ },
+ "timezone": "browser",
+ "panels": [
+  {
+   "id": 100,
+   "type": "row",
+   "title": "Live transcript & accuracy",
+   "collapsed": false,
+   "gridPos": {
+    "x": 0,
+    "y": 0,
+    "w": 24,
+    "h": 1
+   },
+   "panels": []
+  },
+  {
+   "id": 101,
+   "type": "text",
+   "title": "Live player (video + transcript)",
+   "description": "The live-stt web page embedded. Click any sentence to play the video from that moment; LIVE returns to the live edge.",
+   "gridPos": {
+    "x": 0,
+    "y": 1,
+    "w": 14,
+    "h": 20
+   },
+   "options": {
+    "mode": "html",
+    "content": "<iframe src=\"${ui_url}/?embed=1&min_conf=${min_conf}\" style=\"width:100%;height:100%;border:0\" allow=\"autoplay\"></iframe>"
+   }
+  },
+  {
+   "id": 102,
+   "type": "stat",
+   "title": "Avg confidence (live, 5 min)",
+   "description": "Mean word probability of final+refined segments — model confidence, not accuracy.",
+   "datasource": {
+    "type": "prometheus",
+    "uid": "prometheus"
+   },
+   "gridPos": {
+    "x": 14,
+    "y": 1,
+    "w": 5,
+    "h": 4
+   },
+   "fieldConfig": {
+    "defaults": {
+     "unit": "percentunit",
+     "decimals": 1,
+     "thresholds": {
+      "mode": "absolute",
+      "steps": [
+       {
+        "color": "red",
+        "value": null
+       },
+       {
+        "color": "orange",
+        "value": 0.8
+       },
+       {
+        "color": "green",
+        "value": 0.9
+       }
+      ]
+     }
+    },
+    "overrides": []
+   },
+   "options": {
+    "reduceOptions": {
+     "calcs": [
+      "lastNotNull"
+     ],
+     "fields": "",
+     "values": false
+    },
+    "colorMode": "value",
+    "graphMode": "none",
+    "textMode": "auto"
+   },
+   "targets": [
+    {
+     "refId": "A",
+     "datasource": {
+      "type": "prometheus",
+      "uid": "prometheus"
+     },
+     "expr": "sum(rate(stt_asr_segment_confidence_sum[5m])) / sum(rate(stt_asr_segment_confidence_count[5m]))"
+    }
+   ]
+  },
+  {
+   "id": 103,
+   "type": "stat",
+   "title": "Segments > 90% confidence (live, 5 min)",
+   "description": "Share of segments in the last 5 minutes whose confidence is above 90 %.",
+   "datasource": {
+    "type": "prometheus",
+    "uid": "prometheus"
+   },
+   "gridPos": {
+    "x": 19,
+    "y": 1,
+    "w": 5,
+    "h": 4
+   },
+   "fieldConfig": {
+    "defaults": {
+     "unit": "percentunit",
+     "decimals": 0,
+     "thresholds": {
+      "mode": "absolute",
+      "steps": [
+       {
+        "color": "text",
+        "value": null
+       }
+      ]
+     }
+    },
+    "overrides": []
+   },
+   "options": {
+    "reduceOptions": {
+     "calcs": [
+      "lastNotNull"
+     ],
+     "fields": "",
+     "values": false
+    },
+    "colorMode": "value",
+    "graphMode": "none",
+    "textMode": "auto"
+   },
+   "targets": [
+    {
+     "refId": "A",
+     "datasource": {
+      "type": "prometheus",
+      "uid": "prometheus"
+     },
+     "expr": "1 - sum(rate(stt_asr_segment_confidence_bucket{le=\"0.9\"}[5m])) / sum(rate(stt_asr_segment_confidence_count[5m]))"
+    }
+   ]
+  },
+  {
+   "id": 104,
+   "type": "stat",
+   "title": "Avg confidence (range)",
+   "description": "Average model confidence of stored segments in the selected time range.",
+   "datasource": {
+    "type": "grafana-postgresql-datasource",
+    "uid": "${pg}"
+   },
+   "gridPos": {
+    "x": 14,
+    "y": 5,
+    "w": 5,
+    "h": 4
+   },
+   "fieldConfig": {
+    "defaults": {
+     "unit": "percentunit",
+     "decimals": 1,
+     "thresholds": {
+      "mode": "absolute",
+      "steps": [
+       {
+        "color": "red",
+        "value": null
+       },
+       {
+        "color": "orange",
+        "value": 0.8
+       },
+       {
+        "color": "green",
+        "value": 0.9
+       }
+      ]
+     }
+    },
+    "overrides": []
+   },
+   "options": {
+    "reduceOptions": {
+     "calcs": [
+      "lastNotNull"
+     ],
+     "fields": "",
+     "values": false
+    },
+    "colorMode": "value",
+    "graphMode": "none",
+    "textMode": "auto"
+   },
+   "targets": [
+    {
+     "refId": "A",
+     "datasource": {
+      "type": "grafana-postgresql-datasource",
+      "uid": "${pg}"
+     },
+     "editorMode": "code",
+     "rawQuery": true,
+     "format": "table",
+     "rawSql": "SELECT avg(confidence) FROM asr_segments WHERE $__timeFilter(start_utc) AND channel_id IN (${channel:sqlstring})"
+    }
+   ]
+  },
+  {
+   "id": 105,
+   "type": "stat",
+   "title": "Segments ≥ min confidence (range)",
+   "description": "Share of stored segments at or above the Min confidence variable.",
+   "datasource": {
+    "type": "grafana-postgresql-datasource",
+    "uid": "${pg}"
+   },
+   "gridPos": {
+    "x": 19,
+    "y": 5,
+    "w": 5,
+    "h": 4
+   },
+   "fieldConfig": {
+    "defaults": {
+     "unit": "percentunit",
+     "decimals": 0,
+     "thresholds": {
+      "mode": "absolute",
+      "steps": [
+       {
+        "color": "text",
+        "value": null
+       }
+      ]
+     }
+    },
+    "overrides": []
+   },
+   "options": {
+    "reduceOptions": {
+     "calcs": [
+      "lastNotNull"
+     ],
+     "fields": "",
+     "values": false
+    },
+    "colorMode": "value",
+    "graphMode": "none",
+    "textMode": "auto"
+   },
+   "targets": [
+    {
+     "refId": "A",
+     "datasource": {
+      "type": "grafana-postgresql-datasource",
+      "uid": "${pg}"
+     },
+     "editorMode": "code",
+     "rawQuery": true,
+     "format": "table",
+     "rawSql": "SELECT avg(CASE WHEN confidence >= $min_conf THEN 1.0 ELSE 0.0 END) FROM asr_segments WHERE $__timeFilter(start_utc) AND channel_id IN (${channel:sqlstring})"
+    }
+   ]
+  },
+  {
+   "id": 106,
+   "type": "stat",
+   "title": "Segments (range)",
+   "description": "Number of stored transcript segments (≈ 8–10 s of speech each) in the time range.",
+   "datasource": {
+    "type": "grafana-postgresql-datasource",
+    "uid": "${pg}"
+   },
+   "gridPos": {
+    "x": 14,
+    "y": 9,
+    "w": 5,
+    "h": 4
+   },
+   "fieldConfig": {
+    "defaults": {
+     "unit": "none",
+     "decimals": 0,
+     "thresholds": {
+      "mode": "absolute",
+      "steps": [
+       {
+        "color": "text",
+        "value": null
+       }
+      ]
+     }
+    },
+    "overrides": []
+   },
+   "options": {
+    "reduceOptions": {
+     "calcs": [
+      "lastNotNull"
+     ],
+     "fields": "",
+     "values": false
+    },
+    "colorMode": "value",
+    "graphMode": "none",
+    "textMode": "auto"
+   },
+   "targets": [
+    {
+     "refId": "A",
+     "datasource": {
+      "type": "grafana-postgresql-datasource",
+      "uid": "${pg}"
+     },
+     "editorMode": "code",
+     "rawQuery": true,
+     "format": "table",
+     "rawSql": "SELECT count(*) FROM asr_segments WHERE $__timeFilter(start_utc) AND channel_id IN (${channel:sqlstring})"
+    }
+   ]
+  },
+  {
+   "id": 107,
+   "type": "stat",
+   "title": "Refined share (range)",
+   "description": "Share of segments whose REFINE pass completed (the rest keep FAST text; refine_skipped is flagged).",
+   "datasource": {
+    "type": "grafana-postgresql-datasource",
+    "uid": "${pg}"
+   },
+   "gridPos": {
+    "x": 19,
+    "y": 9,
+    "w": 5,
+    "h": 4
+   },
+   "fieldConfig": {
+    "defaults": {
+     "unit": "percentunit",
+     "decimals": 0,
+     "thresholds": {
+      "mode": "absolute",
+      "steps": [
+       {
+        "color": "text",
+        "value": null
+       }
+      ]
+     }
+    },
+    "overrides": []
+   },
+   "options": {
+    "reduceOptions": {
+     "calcs": [
+      "lastNotNull"
+     ],
+     "fields": "",
+     "values": false
+    },
+    "colorMode": "value",
+    "graphMode": "none",
+    "textMode": "auto"
+   },
+   "targets": [
+    {
+     "refId": "A",
+     "datasource": {
+      "type": "grafana-postgresql-datasource",
+      "uid": "${pg}"
+     },
+     "editorMode": "code",
+     "rawQuery": true,
+     "format": "table",
+     "rawSql": "SELECT avg(CASE WHEN pass='refined' THEN 1.0 ELSE 0.0 END) FROM asr_segments WHERE $__timeFilter(start_utc) AND channel_id IN (${channel:sqlstring})"
+    }
+   ]
+  },
+  {
+   "id": 108,
+   "type": "stat",
+   "title": "Measured word accuracy — FAST (reference set)",
+   "description": "1 − WER against hand-made reference transcripts (stt bench → stt record-accuracy). Read speech (FLEURS) until broadcast references exist.",
+   "datasource": {
+    "type": "grafana-postgresql-datasource",
+    "uid": "${pg}"
+   },
+   "gridPos": {
+    "x": 14,
+    "y": 13,
+    "w": 5,
+    "h": 4
+   },
+   "fieldConfig": {
+    "defaults": {
+     "unit": "percentunit",
+     "decimals": 1,
+     "thresholds": {
+      "mode": "absolute",
+      "steps": [
+       {
+        "color": "red",
+        "value": null
+       },
+       {
+        "color": "orange",
+        "value": 0.8
+       },
+       {
+        "color": "green",
+        "value": 0.9
+       }
+      ]
+     }
+    },
+    "overrides": []
+   },
+   "options": {
+    "reduceOptions": {
+     "calcs": [
+      "lastNotNull"
+     ],
+     "fields": "",
+     "values": false
+    },
+    "colorMode": "value",
+    "graphMode": "none",
+    "textMode": "auto"
+   },
+   "targets": [
+    {
+     "refId": "A",
+     "datasource": {
+      "type": "grafana-postgresql-datasource",
+      "uid": "${pg}"
+     },
+     "editorMode": "code",
+     "rawQuery": true,
+     "format": "table",
+     "rawSql": "SELECT 1 - value FROM accuracy_results WHERE kind='bench' AND metric='wer' AND config LIKE 'large-v3-turbo int8 b1 seg10%' ORDER BY recorded_at DESC LIMIT 1"
+    }
+   ]
+  },
+  {
+   "id": 109,
+   "type": "stat",
+   "title": "Words ≥ 90% conf: measured correct",
+   "description": "Of the words the model rated ≥ 90% confident, the share that matched the reference (bench/calibration.py).",
+   "datasource": {
+    "type": "grafana-postgresql-datasource",
+    "uid": "${pg}"
+   },
+   "gridPos": {
+    "x": 19,
+    "y": 13,
+    "w": 5,
+    "h": 4
+   },
+   "fieldConfig": {
+    "defaults": {
+     "unit": "percentunit",
+     "decimals": 1,
+     "thresholds": {
+      "mode": "absolute",
+      "steps": [
+       {
+        "color": "red",
+        "value": null
+       },
+       {
+        "color": "orange",
+        "value": 0.8
+       },
+       {
+        "color": "green",
+        "value": 0.9
+       }
+      ]
+     }
+    },
+    "overrides": []
+   },
+   "options": {
+    "reduceOptions": {
+     "calcs": [
+      "lastNotNull"
+     ],
+     "fields": "",
+     "values": false
+    },
+    "colorMode": "value",
+    "graphMode": "none",
+    "textMode": "auto"
+   },
+   "targets": [
+    {
+     "refId": "A",
+     "datasource": {
+      "type": "grafana-postgresql-datasource",
+      "uid": "${pg}"
+     },
+     "editorMode": "code",
+     "rawQuery": true,
+     "format": "table",
+     "rawSql": "SELECT value FROM accuracy_results WHERE kind='calibration_word' AND metric='precision' AND threshold BETWEEN 0.899 AND 0.901 ORDER BY recorded_at DESC LIMIT 1"
+    }
+   ]
+  },
+  {
+   "id": 110,
+   "type": "stat",
+   "title": "Words ≥ 90% conf: share of all words",
+   "description": "How many of all words the model rated ≥ 90 % confident (reference set).",
+   "datasource": {
+    "type": "grafana-postgresql-datasource",
+    "uid": "${pg}"
+   },
+   "gridPos": {
+    "x": 14,
+    "y": 17,
+    "w": 5,
+    "h": 4
+   },
+   "fieldConfig": {
+    "defaults": {
+     "unit": "percentunit",
+     "decimals": 1,
+     "thresholds": {
+      "mode": "absolute",
+      "steps": [
+       {
+        "color": "text",
+        "value": null
+       }
+      ]
+     }
+    },
+    "overrides": []
+   },
+   "options": {
+    "reduceOptions": {
+     "calcs": [
+      "lastNotNull"
+     ],
+     "fields": "",
+     "values": false
+    },
+    "colorMode": "value",
+    "graphMode": "none",
+    "textMode": "auto"
+   },
+   "targets": [
+    {
+     "refId": "A",
+     "datasource": {
+      "type": "grafana-postgresql-datasource",
+      "uid": "${pg}"
+     },
+     "editorMode": "code",
+     "rawQuery": true,
+     "format": "table",
+     "rawSql": "SELECT value FROM accuracy_results WHERE kind='calibration_word' AND metric='kept_share' AND threshold BETWEEN 0.899 AND 0.901 ORDER BY recorded_at DESC LIMIT 1"
+    }
+   ]
+  },
+  {
+   "id": 111,
+   "type": "stat",
+   "title": "Refine skipped (range)",
+   "description": "Segments whose second pass was skipped because the CPU was busy (they keep the live FAST text).",
+   "datasource": {
+    "type": "grafana-postgresql-datasource",
+    "uid": "${pg}"
+   },
+   "gridPos": {
+    "x": 19,
+    "y": 17,
+    "w": 5,
+    "h": 4
+   },
+   "fieldConfig": {
+    "defaults": {
+     "unit": "none",
+     "decimals": 0,
+     "thresholds": {
+      "mode": "absolute",
+      "steps": [
+       {
+        "color": "text",
+        "value": null
+       }
+      ]
+     }
+    },
+    "overrides": []
+   },
+   "options": {
+    "reduceOptions": {
+     "calcs": [
+      "lastNotNull"
+     ],
+     "fields": "",
+     "values": false
+    },
+    "colorMode": "value",
+    "graphMode": "none",
+    "textMode": "auto"
+   },
+   "targets": [
+    {
+     "refId": "A",
+     "datasource": {
+      "type": "grafana-postgresql-datasource",
+      "uid": "${pg}"
+     },
+     "editorMode": "code",
+     "rawQuery": true,
+     "format": "table",
+     "rawSql": "SELECT count(*) FROM asr_segments WHERE $__timeFilter(start_utc) AND channel_id IN (${channel:sqlstring}) AND EXISTS (SELECT 1 FROM unnest(flags) f WHERE f LIKE 'refine_skipped%')"
+    }
+   ]
+  },
+  {
+   "id": 112,
+   "type": "table",
+   "title": "Transcript — click the text to open that moment with video",
+   "description": "Stored transcript segments in the selected time range (top-right picker), filtered by Channel and Min confidence (top-left). Click a row's text to open the player at that moment.",
+   "datasource": {
+    "type": "grafana-postgresql-datasource",
+    "uid": "${pg}"
+   },
+   "gridPos": {
+    "x": 0,
+    "y": 21,
+    "w": 16,
+    "h": 14
+   },
+   "targets": [
+    {
+     "refId": "A",
+     "datasource": {
+      "type": "grafana-postgresql-datasource",
+      "uid": "${pg}"
+     },
+     "editorMode": "code",
+     "rawQuery": true,
+     "format": "table",
+     "rawSql": "SELECT start_utc AS \"time\", channel_id, pass, round(confidence::numeric, 3) AS confidence, text_raw AS text, extract(epoch FROM start_utc) AS t FROM asr_segments WHERE $__timeFilter(start_utc) AND channel_id IN (${channel:sqlstring}) AND ($min_conf = 0 OR confidence >= $min_conf) ORDER BY start_utc DESC LIMIT 500"
+    }
+   ],
+   "fieldConfig": {
+    "defaults": {
+     "custom": {
+      "align": "auto",
+      "cellOptions": {
+       "type": "auto"
+      }
+     }
+    },
+    "overrides": [
+     {
+      "matcher": {
+       "id": "byName",
+       "options": "t"
+      },
+      "properties": [
+       {
+        "id": "custom.hidden",
+        "value": true
+       }
+      ]
+     },
+     {
+      "matcher": {
+       "id": "byName",
+       "options": "time"
+      },
+      "properties": [
+       {
+        "id": "custom.width",
+        "value": 190
+       }
+      ]
+     },
+     {
+      "matcher": {
+       "id": "byName",
+       "options": "channel_id"
+      },
+      "properties": [
+       {
+        "id": "custom.width",
+        "value": 90
+       }
+      ]
+     },
+     {
+      "matcher": {
+       "id": "byName",
+       "options": "pass"
+      },
+      "properties": [
+       {
+        "id": "custom.width",
+        "value": 80
+       }
+      ]
+     },
+     {
+      "matcher": {
+       "id": "byName",
+       "options": "confidence"
+      },
+      "properties": [
+       {
+        "id": "custom.width",
+        "value": 100
+       },
+       {
+        "id": "unit",
+        "value": "percentunit"
+       },
+       {
+        "id": "custom.cellOptions",
+        "value": {
+         "type": "color-text"
+        }
+       },
+       {
+        "id": "thresholds",
+        "value": {
+         "mode": "absolute",
+         "steps": [
+          {
+           "color": "red",
+           "value": null
+          },
+          {
+           "color": "orange",
+           "value": 0.8
+          },
+          {
+           "color": "green",
+           "value": 0.9
+          }
+         ]
+        }
+       }
+      ]
+     },
+     {
+      "matcher": {
+       "id": "byName",
+       "options": "text"
+      },
+      "properties": [
+       {
+        "id": "links",
+        "value": [
+         {
+          "title": "Open this moment with video",
+          "url": "${ui_url}/?ch=${__data.fields.channel_id}&t=${__data.fields.t}",
+          "targetBlank": true
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   "options": {
+    "showHeader": true,
+    "cellHeight": "md"
+   }
+  },
+  {
+   "id": 113,
+   "type": "table",
+   "title": "Measured accuracy (reference transcripts)",
+   "description": "From result files recorded with `stt record-accuracy`. accuracy = 1 − WER.",
+   "datasource": {
+    "type": "grafana-postgresql-datasource",
+    "uid": "${pg}"
+   },
+   "gridPos": {
+    "x": 16,
+    "y": 21,
+    "w": 8,
+    "h": 14
+   },
+   "targets": [
+    {
+     "refId": "A",
+     "datasource": {
+      "type": "grafana-postgresql-datasource",
+      "uid": "${pg}"
+     },
+     "editorMode": "code",
+     "rawQuery": true,
+     "format": "table",
+     "rawSql": "SELECT dataset, kind, config, metric, threshold, round(value::numeric, 3) AS value, n FROM accuracy_results WHERE (kind = 'bench' AND metric IN ('wer','cer','rtf')) OR (kind LIKE 'calibration%' AND threshold IN (0, 0.8, 0.9, 0.95)) ORDER BY dataset, kind, config, metric, threshold"
+    }
+   ],
+   "options": {
+    "showHeader": true,
+    "cellHeight": "sm"
+   }
+  },
+  {
+   "id": 114,
+   "type": "timeseries",
+   "title": "Model confidence over time (5 min)",
+   "description": "Average model confidence per channel and pass. A drop often means music, noise, crosstalk or a language the model handles poorly.",
+   "datasource": {
+    "type": "prometheus",
+    "uid": "prometheus"
+   },
+   "gridPos": {
+    "x": 0,
+    "y": 35,
+    "w": 24,
+    "h": 7
+   },
+   "fieldConfig": {
+    "defaults": {
+     "unit": "percentunit",
+     "min": 0,
+     "max": 1
+    },
+    "overrides": []
+   },
+   "targets": [
+    {
+     "refId": "A",
+     "datasource": {
+      "type": "prometheus",
+      "uid": "prometheus"
+     },
+     "expr": "sum by (channel, pass) (rate(stt_asr_segment_confidence_sum[5m])) / sum by (channel, pass) (rate(stt_asr_segment_confidence_count[5m]))",
+     "legendFormat": "{{channel}} {{pass}}"
+    }
+   ]
+  },
+  {
+   "id": 115,
+   "type": "row",
+   "title": "Pipeline metrics",
+   "collapsed": false,
+   "gridPos": {
+    "x": 0,
+    "y": 42,
+    "w": 24,
+    "h": 1
+   },
+   "panels": []
+  },
+  {
+   "id": 1,
+   "type": "timeseries",
+   "title": "speech_end → final (p50 / p95)",
+   "datasource": {
+    "type": "prometheus",
+    "uid": "prometheus"
+   },
+   "gridPos": {
+    "x": 0,
+    "y": 43,
+    "w": 12,
+    "h": 8
+   },
+   "fieldConfig": {
+    "defaults": {
+     "unit": "s"
+    },
+    "overrides": []
+   },
+   "options": {
+    "legend": {
+     "displayMode": "table",
+     "placement": "bottom",
+     "calcs": [
+      "lastNotNull",
+      "max"
+     ]
+    }
+   },
+   "targets": [
+    {
+     "refId": "A",
+     "expr": "histogram_quantile(0.5, sum by (le, channel) (rate(stt_latency_speech_end_to_final_seconds_bucket[5m])))",
+     "legendFormat": "p50 {{channel}}"
+    },
+    {
+     "refId": "B",
+     "expr": "histogram_quantile(0.95, sum by (le, channel) (rate(stt_latency_speech_end_to_final_seconds_bucket[5m])))",
+     "legendFormat": "p95 {{channel}}"
+    }
+   ],
+   "description": "How long after someone stops speaking the live (FAST) text appears. p50 = half of the sentences are faster than this; p95 = 95 % are. Rising lines = the CPU is falling behind."
+  },
+  {
+   "id": 2,
+   "type": "timeseries",
+   "title": "speech_end → refined (p50 / p95)",
+   "datasource": {
+    "type": "prometheus",
+    "uid": "prometheus"
+   },
+   "gridPos": {
+    "x": 12,
+    "y": 43,
+    "w": 12,
+    "h": 8
+   },
+   "fieldConfig": {
+    "defaults": {
+     "unit": "s"
+    },
+    "overrides": []
+   },
+   "options": {
+    "legend": {
+     "displayMode": "table",
+     "placement": "bottom",
+     "calcs": [
+      "lastNotNull",
+      "max"
+     ]
+    }
+   },
+   "targets": [
+    {
+     "refId": "A",
+     "expr": "histogram_quantile(0.5, sum by (le, channel) (rate(stt_latency_speech_end_to_refined_seconds_bucket[5m])))",
+     "legendFormat": "p50 {{channel}}"
+    },
+    {
+     "refId": "B",
+     "expr": "histogram_quantile(0.95, sum by (le, channel) (rate(stt_latency_speech_end_to_refined_seconds_bucket[5m])))",
+     "legendFormat": "p95 {{channel}}"
+    }
+   ],
+   "description": "Same, for the careful second pass (REFINE). On CPU it only runs when FAST is idle, so it can be minutes behind or empty during continuous speech."
+  },
+  {
+   "id": 3,
+   "type": "timeseries",
+   "title": "speech → partial (p50 / p95)",
+   "datasource": {
+    "type": "prometheus",
+    "uid": "prometheus"
+   },
+   "gridPos": {
+    "x": 0,
+    "y": 51,
+    "w": 12,
+    "h": 8
+   },
+   "fieldConfig": {
+    "defaults": {
+     "unit": "s"
+    },
+    "overrides": []
+   },
+   "options": {
+    "legend": {
+     "displayMode": "table",
+     "placement": "bottom",
+     "calcs": [
+      "lastNotNull",
+      "max"
+     ]
+    }
+   },
+   "targets": [
+    {
+     "refId": "A",
+     "expr": "histogram_quantile(0.5, sum by (le, channel) (rate(stt_latency_speech_to_partial_seconds_bucket[5m])))",
+     "legendFormat": "p50 {{channel}}"
+    },
+    {
+     "refId": "B",
+     "expr": "histogram_quantile(0.95, sum by (le, channel) (rate(stt_latency_speech_to_partial_seconds_bucket[5m])))",
+     "legendFormat": "p95 {{channel}}"
+    }
+   ],
+   "description": "Time from speech start to the first partial caption (only in streaming mode; empty in segment mode)."
+  },
+  {
+   "id": 4,
+   "type": "timeseries",
+   "title": "ASR queue lag",
+   "datasource": {
+    "type": "prometheus",
+    "uid": "prometheus"
+   },
+   "gridPos": {
+    "x": 12,
+    "y": 51,
+    "w": 12,
+    "h": 8
+   },
+   "fieldConfig": {
+    "defaults": {
+     "unit": "s"
+    },
+    "overrides": []
+   },
+   "options": {
+    "legend": {
+     "displayMode": "table",
+     "placement": "bottom",
+     "calcs": [
+      "lastNotNull",
+      "max"
+     ]
+    }
+   },
+   "targets": [
+    {
+     "refId": "A",
+     "expr": "stt_asr_queue_lag_seconds",
+     "legendFormat": "{{pass}}"
+    },
+    {
+     "refId": "B",
+     "expr": "stt_asr_fast_lag_alert",
+     "legendFormat": "FAST lag alert"
+    }
+   ],
+   "description": "Age of the oldest waiting transcription job. FAST lag growing without limit = overloaded."
+  },
+  {
+   "id": 5,
+   "type": "timeseries",
+   "title": "ASR queue depth",
+   "datasource": {
+    "type": "prometheus",
+    "uid": "prometheus"
+   },
+   "gridPos": {
+    "x": 0,
+    "y": 59,
+    "w": 12,
+    "h": 8
+   },
+   "fieldConfig": {
+    "defaults": {
+     "unit": "short"
+    },
+    "overrides": []
+   },
+   "options": {
+    "legend": {
+     "displayMode": "table",
+     "placement": "bottom",
+     "calcs": [
+      "lastNotNull",
+      "max"
+     ]
+    }
+   },
+   "targets": [
+    {
+     "refId": "A",
+     "expr": "stt_asr_queue_depth",
+     "legendFormat": "{{pass}}"
+    }
+   ],
+   "description": "How many transcription jobs are waiting. FAST should stay near 0–2; REFINE may grow (it is capped and older work is skipped, flagged refine_skipped)."
+  },
+  {
+   "id": 6,
+   "type": "timeseries",
+   "title": "RTF p50 / p95",
+   "datasource": {
+    "type": "prometheus",
+    "uid": "prometheus"
+   },
+   "gridPos": {
+    "x": 12,
+    "y": 59,
+    "w": 12,
+    "h": 8
+   },
+   "fieldConfig": {
+    "defaults": {
+     "unit": "short"
+    },
+    "overrides": []
+   },
+   "options": {
+    "legend": {
+     "displayMode": "table",
+     "placement": "bottom",
+     "calcs": [
+      "lastNotNull",
+      "max"
+     ]
+    }
+   },
+   "targets": [
+    {
+     "refId": "A",
+     "expr": "histogram_quantile(0.5, sum by (le, pass) (rate(stt_asr_rtf_bucket[5m])))",
+     "legendFormat": "p50 {{pass}}"
+    },
+    {
+     "refId": "B",
+     "expr": "histogram_quantile(0.95, sum by (le, pass) (rate(stt_asr_rtf_bucket[5m])))",
+     "legendFormat": "p95 {{pass}}"
+    }
+   ],
+   "description": "Real-time factor: seconds of compute per second of audio. Below 1 = faster than real time."
+  },
+  {
+   "id": 7,
+   "type": "timeseries",
+   "title": "Stream up",
+   "datasource": {
+    "type": "prometheus",
+    "uid": "prometheus"
+   },
+   "gridPos": {
+    "x": 0,
+    "y": 67,
+    "w": 8,
+    "h": 8
+   },
+   "fieldConfig": {
+    "defaults": {
+     "unit": "short"
+    },
+    "overrides": []
+   },
+   "options": {
+    "legend": {
+     "displayMode": "table",
+     "placement": "bottom",
+     "calcs": [
+      "lastNotNull",
+      "max"
+     ]
+    }
+   },
+   "targets": [
+    {
+     "refId": "A",
+     "expr": "stt_stream_up",
+     "legendFormat": "{{channel}}"
+    }
+   ],
+   "description": "1 when the channel's UDP stream is being received, 0 when it is down."
+  },
+  {
+   "id": 8,
+   "type": "timeseries",
+   "title": "Clock drift",
+   "datasource": {
+    "type": "prometheus",
+    "uid": "prometheus"
+   },
+   "gridPos": {
+    "x": 8,
+    "y": 67,
+    "w": 8,
+    "h": 8
+   },
+   "fieldConfig": {
+    "defaults": {
+     "unit": "ms"
+    },
+    "overrides": []
+   },
+   "options": {
+    "legend": {
+     "displayMode": "table",
+     "placement": "bottom",
+     "calcs": [
+      "lastNotNull",
+      "max"
+     ]
+    }
+   },
+   "targets": [
+    {
+     "refId": "A",
+     "expr": "stt_clock_drift_ms",
+     "legendFormat": "{{channel}}"
+    }
+   ],
+   "description": "Difference between the stream's own clock (PTS) and the computer clock. Stays near 0; spikes at loop restarts / encoder resets are re-anchored automatically."
+  },
+  {
+   "id": 9,
+   "type": "timeseries",
+   "title": "VAD speech ratio",
+   "datasource": {
+    "type": "prometheus",
+    "uid": "prometheus"
+   },
+   "gridPos": {
+    "x": 16,
+    "y": 67,
+    "w": 8,
+    "h": 8
+   },
+   "fieldConfig": {
+    "defaults": {
+     "unit": "percentunit"
+    },
+    "overrides": []
+   },
+   "options": {
+    "legend": {
+     "displayMode": "table",
+     "placement": "bottom",
+     "calcs": [
+      "lastNotNull",
+      "max"
+     ]
+    }
+   },
+   "targets": [
+    {
+     "refId": "A",
+     "expr": "stt_vad_speech_ratio",
+     "legendFormat": "{{channel}}"
+    }
+   ],
+   "description": "Share of the last minute that the voice detector classified as speech (music/silence lower it)."
+  },
+  {
+   "id": 10,
+   "type": "timeseries",
+   "title": "Stream events / min",
+   "datasource": {
+    "type": "prometheus",
+    "uid": "prometheus"
+   },
+   "gridPos": {
+    "x": 0,
+    "y": 75,
+    "w": 12,
+    "h": 8
+   },
+   "fieldConfig": {
+    "defaults": {
+     "unit": "short"
+    },
+    "overrides": []
+   },
+   "options": {
+    "legend": {
+     "displayMode": "table",
+     "placement": "bottom",
+     "calcs": [
+      "lastNotNull",
+      "max"
+     ]
+    }
+   },
+   "targets": [
+    {
+     "refId": "A",
+     "expr": "sum by (channel, type) (increase(stt_stream_events_total[1m]))",
+     "legendFormat": "{{channel}} {{type}}"
+    }
+   ],
+   "description": "Stream events per minute: up/down, discontinuities (timestamp jumps), drift corrections."
+  },
+  {
+   "id": 11,
+   "type": "timeseries",
+   "title": "Guard drops / min, refine skipped",
+   "datasource": {
+    "type": "prometheus",
+    "uid": "prometheus"
+   },
+   "gridPos": {
+    "x": 12,
+    "y": 75,
+    "w": 12,
+    "h": 8
+   },
+   "fieldConfig": {
+    "defaults": {
+     "unit": "short"
+    },
+    "overrides": []
+   },
+   "options": {
+    "legend": {
+     "displayMode": "table",
+     "placement": "bottom",
+     "calcs": [
+      "lastNotNull",
+      "max"
+     ]
+    }
+   },
+   "targets": [
+    {
+     "refId": "A",
+     "expr": "sum by (pass, reason) (increase(stt_asr_guard_drops_total[1m]))",
+     "legendFormat": "{{pass}} {{reason}}"
+    },
+    {
+     "refId": "B",
+     "expr": "increase(stt_asr_refine_skipped_total[1m])",
+     "legendFormat": "refine skipped"
+    }
+   ],
+   "description": "Segments removed or flagged by the hallucination guards, and REFINE passes skipped under load."
+  },
+  {
+   "id": 12,
+   "type": "timeseries",
+   "title": "Segments emitted / min",
+   "datasource": {
+    "type": "prometheus",
+    "uid": "prometheus"
+   },
+   "gridPos": {
+    "x": 0,
+    "y": 83,
+    "w": 12,
+    "h": 8
+   },
+   "fieldConfig": {
+    "defaults": {
+     "unit": "short"
+    },
+    "overrides": []
+   },
+   "options": {
+    "legend": {
+     "displayMode": "table",
+     "placement": "bottom",
+     "calcs": [
+      "lastNotNull",
+      "max"
+     ]
+    }
+   },
+   "targets": [
+    {
+     "refId": "A",
+     "expr": "sum by (channel, cut) (increase(stt_segments_emitted_total[1m]))",
+     "legendFormat": "{{channel}} {{cut}}"
+    }
+   ],
+   "description": "Speech segments sent for transcription per minute (silence = cut at a pause, forced = cut at max length inside continuous speech)."
+  },
+  {
+   "id": 13,
+   "type": "timeseries",
+   "title": "Ingest bitrate",
+   "datasource": {
+    "type": "prometheus",
+    "uid": "prometheus"
+   },
+   "gridPos": {
+    "x": 12,
+    "y": 83,
+    "w": 12,
+    "h": 8
+   },
+   "fieldConfig": {
+    "defaults": {
+     "unit": "bps"
+    },
+    "overrides": []
+   },
+   "options": {
+    "legend": {
+     "displayMode": "table",
+     "placement": "bottom",
+     "calcs": [
+      "lastNotNull",
+      "max"
+     ]
+    }
+   },
+   "targets": [
+    {
+     "refId": "A",
+     "expr": "rate(stt_ingest_bytes_total[1m]) * 8",
+     "legendFormat": "{{channel}}"
+    }
+   ],
+   "description": "Incoming audio bitrate per channel — a flat line at 0 means no packets arrive."
+  }
+ ],
+ "tags": [
+  "stt"
+ ],
+ "templating": {
+  "list": [
+   {
+    "name": "pg",
+    "label": "Database",
+    "type": "datasource",
+    "query": "grafana-postgresql-datasource",
+    "current": {}
+   },
+   {
+    "name": "ui_url",
+    "label": "Player URL",
+    "type": "textbox",
+    "query": "http://localhost:8000",
+    "current": {
+     "text": "http://localhost:8000",
+     "value": "http://localhost:8000"
+    },
+    "description": "Where the live-stt web UI is reachable from your browser (e.g. http://your-server:8000)."
+   },
+   {
+    "name": "channel",
+    "label": "Channel",
+    "type": "query",
+    "datasource": {
+     "type": "grafana-postgresql-datasource",
+     "uid": "${pg}"
+    },
+    "query": "SELECT id FROM channels ORDER BY id",
+    "refresh": 1,
+    "multi": true,
+    "includeAll": true,
+    "current": {
+     "text": "All",
+     "value": "$__all"
+    }
+   },
+   {
+    "name": "min_conf",
+    "label": "Min confidence",
+    "type": "custom",
+    "query": "0,0.8,0.9,0.95",
+    "current": {
+     "text": "0.9",
+     "value": "0.9"
+    },
+    "options": [
+     {
+      "text": "0",
+      "value": "0",
+      "selected": false
+     },
+     {
+      "text": "0.8",
+      "value": "0.8",
+      "selected": false
+     },
+     {
+      "text": "0.9",
+      "value": "0.9",
+      "selected": true
+     },
+     {
+      "text": "0.95",
+      "value": "0.95",
+      "selected": false
+     }
+    ]
+   }
+  ]
+ }
+}

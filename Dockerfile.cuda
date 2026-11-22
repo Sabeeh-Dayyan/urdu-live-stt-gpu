@@ -1,0 +1,23 @@
+# CUDA image for production GPU hosts. CTranslate2 4.x wheels need CUDA 12 + cuDNN 9.
+# Build: docker build -f Dockerfile.cuda -t live-stt:cuda .
+# Server deployment: deploy/docker-compose.yml (docs/DEPLOYMENT.md).
+# Run:   docker run --gpus all --network host -v /srv/models:/app/models live-stt:cuda \
+#          supervise -c config/prod-gpu.yaml
+FROM nvidia/cuda:12.4.1-cudnn-runtime-ubuntu22.04
+ENV DEBIAN_FRONTEND=noninteractive PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1 \
+    UV_PROJECT_ENVIRONMENT=/opt/venv PATH=/opt/venv/bin:$PATH PYTHONPATH=/app/src \
+    UV_PYTHON_INSTALL_DIR=/opt/python
+RUN apt-get update && apt-get install -y --no-install-recommends ffmpeg ca-certificates curl \
+    && rm -rf /var/lib/apt/lists/*
+COPY --from=ghcr.io/astral-sh/uv:0.13.9 /uv /usr/local/bin/uv
+WORKDIR /app
+COPY pyproject.toml uv.lock README.md ./
+RUN uv python install 3.11 && uv sync --frozen --no-dev --no-install-project --python 3.11 --extra bench
+COPY src ./src
+COPY config ./config
+COPY ui ./ui
+COPY bench ./bench
+COPY infra ./infra
+EXPOSE 8000 9100-9130
+ENTRYPOINT ["python", "-m", "live_stt.cli"]
+CMD ["supervise", "-c", "config/prod-gpu.yaml"]

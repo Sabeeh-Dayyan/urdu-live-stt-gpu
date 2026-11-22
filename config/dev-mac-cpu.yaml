@@ -1,0 +1,38 @@
+# Dev: macOS Intel i9-9980HK (8C/16T), CPU only. Python services run natively.
+environment: dev-mac-cpu
+
+asr:
+  device: cpu
+  compute_type: int8
+  cpu_threads: 8          # physical cores; bench compares 8 vs 16
+  num_workers: 1
+  fast:   {model: large-v3-turbo, beam_size: 1, best_of: 1}
+  # Measured (BENCHMARKS.md): large-v3 b5 gave no WER/CER gain over turbo on the Urdu reference
+  # set and runs at RTF > 1 here, so REFINE on CPU = turbo beam 5 with ±0.5 s context (no extra RAM).
+  refine: {model: large-v3-turbo, beam_size: 5, best_of: 5}
+  batched: false
+  pack_s: 28              # pack queued segments into one encoder pass (CPU throughput)
+  refine_max_lag_s: 1800  # CPU: REFINE catches up during non-speech; older work is skipped (flagged)
+
+streaming:
+  mode: segment
+  max_segment_s: 10       # measured best on this CPU with packing (RTF 0.90, p50 11.7 s)
+  partials_enabled: false  # enable only if measured RTF leaves headroom
+
+# Rolling HLS copy of each channel (video+audio, no re-encode) for the UI player; 15 min window.
+relay: {enabled: true, dir: var/hls, window_s: 900, segment_s: 2}
+
+logging: {level: INFO, json: false}
+
+channels:
+  - id: ch1
+    name: Test Channel 1
+    url: "udp://127.0.0.1:5101"
+    language: ur
+    glossary_path: config/glossary/ur_default.txt
+  - id: ch2
+    name: Test Channel 2
+    url: "udp://127.0.0.1:5102"
+    language: ur
+    glossary_path: config/glossary/ur_default.txt
+    enabled: false

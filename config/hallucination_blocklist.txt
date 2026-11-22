@@ -1,0 +1,15 @@
+# Known Whisper boilerplate hallucinations on non-speech (case-insensitive substring match on normalised text).
+thanks for watching
+thank you for watching
+please subscribe
+subtitles by
+amara.org
+شکریہ دیکھنے کا
+چینل کو سبسکرائب کریں
+# Non-speech labels Whisper emits on music/noise/silence (measured: large-v3-turbo outputs
+# "موسیقی" on 23/23 non-speech clips with no_speech_prob = 0.0 — bench/guard_eval.py).
+موسیقی
+music
+تالیاں
+applause
+laughter

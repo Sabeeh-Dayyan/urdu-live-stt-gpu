@@ -1,0 +1,11 @@
+# One term per line. Used in initial_prompt / hotwords. Lines starting with # are ignored.
+پاکستان
+اسلام آباد
+وزیراعظم
+وزارت اطلاعات و نشریات
+قومی اسمبلی
+سینیٹ
+پنجاب
+سندھ
+خیبر پختونخوا
+بلوچستان

@@ -1,0 +1,24 @@
+# Production: Linux + NVIDIA GPU (L4/A10/A100). 100-125 channels across ASR services.
+environment: prod-gpu
+
+ingest:
+  buffer_size: 33554432    # requires sysctl net.core.rmem_max >= this
+
+asr:
+  device: cuda
+  compute_type: int8_float16   # or float16; decide from bench
+  fast:   {model: large-v3-turbo, beam_size: 1, best_of: 1}
+  # large-v3 kept for REFINE on GPU; re-decide with `stt bench` on a real broadcast reference set
+  # (on the FLEURS read-speech set it was not better than turbo — see BENCHMARKS.md).
+  refine: {model: large-v3, beam_size: 5, best_of: 5}
+  batched: true
+  max_batch: 16
+  max_wait_ms: 50
+
+streaming:
+  mode: auto               # local_agreement iff CUDA and measured RTF < 0.3
+
+logging: {level: INFO, json: true}
+
+# channels are managed in PostgreSQL via the API in prod; YAML list optional.
+channels: []

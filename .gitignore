@@ -1,0 +1,17 @@
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+models/
+testbed/media/
+testbed/run/
+bench/out/
+.DS_Store
+var/
+run/
+# Broadcast footage, excerpts and references: local testing only (copyright)
+testbed/reference/broadcast/
+testbed/media/broadcast/
+.hypothesis/
+deploy/.env
+*.egg-info/

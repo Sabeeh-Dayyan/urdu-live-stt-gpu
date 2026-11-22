@@ -1,0 +1,15 @@
+global:
+  scrape_interval: 5s
+scrape_configs:
+  # Native Python services on the host; ports per MetricsConfig.base_port (9100):
+  # api=9100, asr=9101, persister=9102, workers=9110+i
+  - job_name: live-stt
+    static_configs:
+      - targets:
+          - host.docker.internal:9100
+          - host.docker.internal:9101
+          - host.docker.internal:9102
+          - host.docker.internal:9110
+          - host.docker.internal:9111
+          - host.docker.internal:9112
+          - host.docker.internal:9113

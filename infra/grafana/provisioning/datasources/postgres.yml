@@ -1,0 +1,18 @@
+apiVersion: 1
+datasources:
+  # Transcripts + measured accuracy. "broadcast" = config/dev-mac-cpu-broadcast.yaml,
+  # "dev" = config/dev-mac-cpu.yaml. The dashboard's "Database" variable switches between them.
+  - name: Postgres (broadcast)
+    uid: pg-broadcast
+    type: grafana-postgresql-datasource
+    url: postgres:5432
+    user: stt
+    jsonData: {database: stt_broadcast, sslmode: disable, postgresVersion: 1600}
+    secureJsonData: {password: stt}
+  - name: Postgres (dev)
+    uid: pg-dev
+    type: grafana-postgresql-datasource
+    url: postgres:5432
+    user: stt
+    jsonData: {database: stt, sslmode: disable, postgresVersion: 1600}
+    secureJsonData: {password: stt}

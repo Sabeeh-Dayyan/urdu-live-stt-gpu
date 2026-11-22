@@ -1,0 +1,15 @@
+.venv
+models
+testbed/media
+testbed/data
+testbed/run
+bench/out
+.git
+**/__pycache__
+.pytest_cache
+var
+run
+.hypothesis
+deploy/.env
+.github
+**/*.pyc
