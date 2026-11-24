@@ -48,9 +48,9 @@ bus:
 db:
   dsn: postgresql://stt:stt@localhost:5432/stt_broadcast
 
-# Rolling HLS copy of each channel (video+audio, no re-encode) for the UI player; 15 min window
-# (~360 MB per channel at 3.2 Mb/s). Click a sentence to replay that moment with video.
-relay: {enabled: true, dir: var/hls, window_s: 900, segment_s: 2}
+# HLS copy of each channel (video+audio, no re-encode) for the UI player: 15 min live window plus
+# a 6 h archive (~1.1 GB per channel-hour at the test feed's ~2.5 Mb/s) for time-range replay.
+relay: {enabled: true, dir: var/hls, window_s: 900, segment_s: 2, archive_hours: 6}
 
 logging: {level: INFO, json: false}
 

@@ -7,6 +7,8 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Noto+Nastaliq+Urdu:wght@400;600&display=swap" rel="stylesheet">
 <script src="/ui/vendor/hls.min.js"></script><!-- hls.js 1.5.20 (vendored) -->
+<link rel="stylesheet" href="/ui/common.css">
+<script src="/ui/common.js"></script>
 <style>
   :root {
     --bg: #f6f7f9; --panel: #ffffff; --ink: #14171c; --muted: #6b7280; --line: #e3e6eb;
@@ -19,8 +21,8 @@
   * { box-sizing: border-box; }
   body { margin: 0; background: var(--bg); color: var(--ink);
          font: 14px/1.4 system-ui, -apple-system, "Segoe UI", sans-serif; }
-  header { display: flex; flex-wrap: wrap; gap: 8px 12px; align-items: center; padding: 10px 16px;
-           border-bottom: 1px solid var(--line); background: var(--panel); position: sticky; top: 0; z-index: 3; }
+  header { display: flex; flex-wrap: wrap; gap: 8px 12px; align-items: center; padding: 8px 16px;
+           border-bottom: 1px solid var(--line); background: var(--panel); }
   header h1 { font-size: 16px; margin: 0 4px 0 0; }
   .pill { font-size: 12px; padding: 2px 8px; border-radius: 999px; border: 1px solid var(--line); color: var(--muted); white-space: nowrap; }
   .pill.ok { color: var(--ok); border-color: var(--ok); }
@@ -66,85 +68,34 @@
   .hidden-n { font-size: 11px; color: var(--muted); padding: 4px 0; }
   #results { padding: 0 16px; }
   #results .seg { background: var(--panel); padding: 6px 10px; border: 1px solid var(--line); border-radius: 6px; margin-top: 6px; }
-  body.embed header, body.embed .note { display: none; }
+  body.embed header, body.embed .note, body.embed nav.top { display: none; }
 </style>
 </head>
 <body>
 <header>
-  <h1>Live STT</h1>
   <span id="conn" class="pill">connecting…</span>
-  <span id="health" class="pill">health ?</span>
   <label>Min confidence
     <select id="minconf" title="Hide sentences below this model confidence (mean word probability)">
       <option value="0">all</option><option value="0.8">≥ 80%</option>
       <option value="0.9" selected>≥ 90%</option><option value="0.95">≥ 95%</option>
     </select>
   </label>
-  <input id="q" dir="auto" placeholder="Search transcripts / تلاش" autocomplete="off">
-  <a id="grafana" class="pill" target="_blank" rel="noopener">Grafana ↗</a>
+  <input id="q" dir="auto" placeholder="Quick search / تلاش (more in Archive &amp; search)" autocomplete="off">
 </header>
 <div class="note" id="accnote">Confidence = the model's own word probability, not verified accuracy.</div>
 <div id="results"></div>
 <main id="grid"></main>
 <script>
 "use strict";
-const MAX_SEGS = 300, STATS_N = 50, LOW_WORD = 0.9, MAX_SENT_S = 20.0, END_CHARS = "۔؟?!.…", PAUSE_S = 1.0;
+const MAX_SEGS = 300, STATS_N = 50;
 const params = new URLSearchParams(location.search);
 if (params.get("embed") === "1") document.body.classList.add("embed");
-const GRAFANA = params.get("grafana") || `${location.protocol}//${location.hostname}:3000/d/live-stt`;
-document.getElementById("grafana").href = GRAFANA;
+nav("live");
 const grid = document.getElementById("grid");
 const minSel = document.getElementById("minconf");
 if (params.get("min_conf") != null) minSel.value = params.get("min_conf");
 const panels = new Map();   // channel_id -> panel
-const pad = (n) => String(n).padStart(2, "0");
-const fmtLocal = (t) => { const d = new Date(t * 1000); return `${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`; };
-const fmtUtc = (t) => new Date(t * 1000).toISOString().replace("T", " ").substr(0, 23) + "Z";
 const minConf = () => parseFloat(minSel.value) || 0;
-
-// ---- sentences across segment cuts (same rules as live_stt/text/sentences.py:assemble)
-function wordOf(x) { return [String(x.w ?? x.word ?? "").trim(), x.s ?? x.start_utc ?? null, x.e ?? x.end_utc ?? null]; }
-function assemble(rows) {
-  const words = [];
-  for (const r of [...rows].sort((a, b) => (a.start_utc || 0) - (b.start_utc || 0))) {
-    let ws = (r.words || []).filter(x => x && typeof x === "object" && wordOf(x)[0]);
-    if (!ws.length && (r.text_raw || "").trim()) ws = [{ w: r.text_raw.trim(), s: r.start_utc, e: r.end_utc }];
-    for (const x of ws) words.push([x, r]);
-  }
-  const out = [];
-  const gap = (a, b) => { const e = wordOf(a)[2], s = wordOf(b)[1]; return (e != null && s != null) ? s - e : 0; };
-  const emit = (chunk) => {
-    if (!chunk.length) return;
-    const ws = chunk.map(c => c[0]);
-    const rs = [...new Set(chunk.map(c => c[1]))];
-    const starts = ws.map(x => wordOf(x)[1]).filter(v => v != null);
-    const ends = ws.map(x => wordOf(x)[2]).filter(v => v != null);
-    const ps = ws.map(x => x.p).filter(p => typeof p === "number" && p >= 0 && p <= 1);
-    const passes = new Set(rs.map(r => ((r.pass || r.type) === "refined" ? "refined" : "fast")));
-    const lats = rs.map(r => r.latency_s ?? (r.timings || {}).latency_s).filter(v => typeof v === "number");
-    out.push({ s: starts.length ? Math.min(...starts) : rs[0].start_utc,
-               e: ends.length ? Math.max(...ends) : rs[rs.length - 1].end_utc,
-               text: ws.map(x => wordOf(x)[0]).join(" "), ws,
-               c: ps.length ? ps.reduce((a, b) => a + b, 0) / ps.length : null,
-               pass: passes.size === 1 ? [...passes][0] : "mixed",
-               lat: lats.length ? Math.max(...lats) : null, segs: rs.map(r => r.segment_id) });
-  };
-  let cur = [];
-  words.forEach(([x, r], i) => {
-    cur.push([x, r]);
-    const t = wordOf(x)[0], nx = words[i + 1] ? words[i + 1][0] : null;
-    if (END_CHARS.includes(t[t.length - 1]) || (nx && gap(x, nx) >= PAUSE_S)) { emit(cur); cur = []; return; }
-    let s0 = wordOf(cur[0][0])[1]; const e1 = wordOf(x)[2];
-    while (cur.length > 1 && s0 != null && e1 != null && e1 - s0 > MAX_SENT_S) {
-      let k = 1, best = -Infinity;
-      for (let j = 1; j < cur.length; j++) { const g = gap(cur[j - 1][0], cur[j][0]); if (g >= best) { best = g; k = j; } }
-      emit(cur.slice(0, k)); cur = cur.slice(k); s0 = wordOf(cur[0][0])[1];
-    }
-  });
-  emit(cur);
-  return out;
-}
-const confClass = (c) => c == null ? "" : c >= 0.9 ? "hiC" : c >= 0.8 ? "midC" : "loC";
 
 // ---- per-channel panel
 function panel(cid, name) {
@@ -390,17 +341,6 @@ function connect() {
     setTimeout(connect, delay); delay = Math.min(delay * 2, 10000);
   };
 }
-async function pollHealth() {
-  const h = document.getElementById("health");
-  try {
-    const r = await fetch("/health");
-    const j = await r.json();
-    const workers = Object.keys(j.components || {}).filter(k => k.startsWith("worker:")).length;
-    h.textContent = `${j.status} · redis ${j.redis ? "✓" : "✗"} · db ${j.db ? "✓" : "✗"} · workers ${workers}`;
-    h.className = "pill " + (j.status === "ok" ? "ok" : "bad");
-  } catch (e) { h.textContent = "health ✗"; h.className = "pill bad"; }
-}
-
 let st = null;
 document.getElementById("q").addEventListener("input", (e) => {
   clearTimeout(st);
@@ -421,8 +361,8 @@ document.getElementById("q").addEventListener("input", (e) => {
         sent.querySelector(".t").textContent = fmtLocal(row.start_utc);
         sent.querySelector(".txt").textContent = row.text_raw;
         sent.querySelector(".c").textContent = row.channel_id;
-        sent.title = "open this moment with video";
-        sent.onclick = () => { location.href = `/?ch=${encodeURIComponent(row.channel_id)}&t=${row.start_utc}`; };
+        sent.title = "open this moment with video and transcript (Archive)";
+        sent.onclick = () => { location.href = `/ui/archive?ch=${encodeURIComponent(row.channel_id)}&t=${row.start_utc}`; };
         n.appendChild(sent);
         box.appendChild(n);
       }
@@ -432,8 +372,6 @@ document.getElementById("q").addEventListener("input", (e) => {
 
 loadChannels().then(connect);
 loadAccuracyNote();
-pollHealth();
-setInterval(pollHealth, 5000);
 </script>
 </body>
 </html>

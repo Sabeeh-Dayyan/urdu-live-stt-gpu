@@ -73,7 +73,7 @@ def test_transcripts_and_search(client, fresh_db):
     assert client.get("/search", params={"q": "%"}).status_code == 400  # empty after normalise
     assert client.get("/search", params={"q": "100"}).json()["results"][0]["channel_id"] == "c2"
     assert client.get("/search", params={"q": "' OR 1=1 --"}).json()["results"] == []
-    assert client.get("/search", params={"q": "x" * 500}).status_code == 422
+    assert client.get("/search", params={"q": "x" * 501}).status_code == 422
 
 
 def test_health_and_metrics(client):

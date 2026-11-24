@@ -20,7 +20,7 @@ streaming:
   partials_enabled: false  # enable only if measured RTF leaves headroom
 
 # Rolling HLS copy of each channel (video+audio, no re-encode) for the UI player; 15 min window.
-relay: {enabled: true, dir: var/hls, window_s: 900, segment_s: 2}
+relay: {enabled: true, dir: var/hls, window_s: 900, segment_s: 2, archive_hours: 2}
 
 logging: {level: INFO, json: false}
 

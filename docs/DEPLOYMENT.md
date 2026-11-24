@@ -12,7 +12,7 @@ feeds over UDP. Day-to-day operations (channels, alerts, troubleshooting) are in
 | GPU | NVIDIA with ≥ 16 GB VRAM (L4, A10, A100, RTX 4090 class) | driver ≥ 550 (CUDA 12.4), [NVIDIA Container Toolkit](https://docs.nvidia.com/datacenter/cloud-native/container-toolkit/latest/install-guide.html) |
 | CPU | 8+ cores | ingest + VAD run on CPU: ≈ 1 % of a core per channel for the video relay, plus decoding/VAD |
 | RAM | 32 GB | each channel worker ≈ 350 MB |
-| Disk | 30 GB + transcripts | models 4.7 GB (turbo + large-v3), image 6.8 GB, video window ≈ 360 MB per channel |
+| Disk | 30 GB + transcripts + video archive | models ≈ 4.7 GB, image 6.8 GB; **video archive ≈ 1.1 GB per channel-hour** at 2.5 Mb/s (default 24 h ≈ 27 GB per channel, `STT_ARCHIVE_HOURS`); uploaded files |
 | Network | NIC on the feed VLAN; NTP | timestamps come from the host clock + stream PTS |
 
 **GPU throughput and latency have not been measured yet** (development hardware had no NVIDIA
@@ -63,8 +63,13 @@ curl -s localhost:8000/health | python3 -m json.tool
 
 ## 4. Add channels
 
-Channels live in PostgreSQL and are managed through the API (the supervisor picks up changes within
-10 s). Find the audio track first:
+Channels live in PostgreSQL. The supervisor picks up changes within 10 s. The easiest way is the
+web UI: open `http://SERVER:8000/ui/channels`, press **🔑** in the top bar and paste
+`STT_API_TOKEN` once (stored in that browser only), then **Add channel** with the stream URL.
+Supported URLs: `udp://` (multicast/unicast MPEG-TS), `rtp://`, `srt://`, `rtsp://`, `rtmp(s)://`,
+`http(s)://` (HLS or progressive). Local file paths are refused through the API.
+
+The same through the API. Find the audio track first:
 
 ```bash
 ffprobe -v error -show_programs -show_streams -of compact 'udp://@239.10.10.5:5000'
@@ -81,21 +86,29 @@ curl -s -X POST localhost:8000/channels \
 
 * Multicast on a specific NIC: add `?localaddr=10.0.0.5` to the URL.
 * Unicast: `udp://@0.0.0.0:5001` (or the server's address).
-* Change or disable: `PATCH /channels/news1` with `{"url": …}` or `{"enabled": false}`.
+* Change or disable: `PATCH /channels/news1` with `{"url": …}` or `{"enabled": false}`; remove:
+  `DELETE /channels/news1` (transcripts are kept).
 * Channel ids: letters, digits, `_ . -` (used in file paths for the video relay).
 
 ## 5. Use it
 
 | What | Where |
 |---|---|
+| **Start page for everything** | `http://SERVER:8000/ui/system`: status, links to every page, Grafana, Prometheus, API docs and a clickable list of all endpoints |
 | Live text + video, export | `http://SERVER:8000` |
+| Watch a past time range, download video, search, topics | `http://SERVER:8000/ui/archive` |
+| Reports (custom range / overall) | `http://SERVER:8000/ui/reports` |
+| Transcribe an uploaded file | `http://SERVER:8000/ui/uploads` |
+| Manage channels | `http://SERVER:8000/ui/channels` |
+| API docs (try every endpoint) | `http://SERVER:8000/docs` |
 | Dashboards | `http://SERVER:3000` (user `admin`, password from `.env`) → *Live STT*. Set the **Player URL** variable at the top to `http://SERVER:8000` once and save the dashboard |
 | REST API | `GET /channels/{id}/transcripts`, `/channels/{id}/export?format=srt\|vtt\|csv\|txt\|json`, `/search?q=`, `WS /ws/live` (see README) |
 
 ## 6. Security checklist
 
-* The API's **write** endpoints require `STT_API_TOKEN`. Read endpoints, the UI and the video are
-  open to anyone who can reach port 8000. Put the server behind a firewall or a TLS reverse proxy
+* The API's **write** endpoints (channels, uploads, deletions) require `STT_API_TOKEN`. Read
+  endpoints, reports, the UI and the video (live and archive) are open to anyone who can reach
+  port 8000. Put the server behind a firewall or a TLS reverse proxy
   with authentication if transcripts are not public, for example Caddy:
   ```
   stt.example.com {
@@ -108,6 +121,9 @@ curl -s -X POST localhost:8000/channels \
 * Grafana: anonymous access is off. The dashboard embeds the player, which needs
   `GF_PANELS_DISABLE_SANITIZE_HTML=true`, so only trusted users should get the Editor role.
 * `deploy/.env` holds the secrets: `chmod 600 deploy/.env`. It is git-ignored.
+* Uploads are limited to `STT_UPLOAD_MAX_MB` (default 4096) and to media files with an audio track;
+  a reverse proxy in front needs a matching body limit (Caddy: `request_body { max_size 4GB }`,
+  nginx: `client_max_body_size 4g;`).
 
 ## 7. Operations
 
@@ -119,8 +135,9 @@ curl -s -X POST localhost:8000/channels \
 | Stop everything | `docker compose down` (data stays in Docker volumes) |
 | Backup transcripts | `docker compose exec -T postgres pg_dump -U stt stt \| gzip > stt-$(date +%F).sql.gz` |
 | Restore | `gunzip -c backup.sql.gz \| docker compose exec -T postgres psql -U stt stt` |
-| Disk used by video replay | `du -sh ../var/hls` (window: `relay.window_s` in the config) |
-| Retention | drop old monthly partitions: `docker compose exec postgres psql -U stt -c 'DROP TABLE asr_segments_2026_01'` |
+| Disk used by video | `du -sh ../var/hls/*` — the archive keeps `STT_ARCHIVE_HOURS` (default 24); older segments are deleted automatically every 10 min |
+| Disk used by uploads | `du -sh ../var/uploads` — kept until deleted in the Upload page or `DELETE /uploads/{id}` |
+| Transcript retention | drop old monthly partitions: `docker compose exec postgres psql -U stt -c 'DROP TABLE asr_segments_2026_01'` |
 
 Containers restart automatically (`restart: unless-stopped`), including after a reboot once Docker
 is enabled (`sudo systemctl enable docker`).

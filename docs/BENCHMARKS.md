@@ -40,8 +40,40 @@ RTF = inference seconds ÷ programme seconds (VAD-gated). Simulated latency = sp
 
 * **FAST** = `large-v3-turbo int8 b1 seg8 t8 pack28` — WER 23.3%, RTF 0.953. Within the configured 3-pt margin of large-v3 or the fastest real-time option.
 * **REFINE** (best large-v3 config) = `large-v3 int8 b5 seg8 t8 pack28` — WER 23.8%, CER 16.2%, RTF 1.272.
-* **Finding:** on this reference set large-v3 gives **no measurable accuracy gain** over turbo (WER within run-to-run noise of ~±2 pts — Whisper's temperature fallback samples), while costing more compute. Configured accordingly: CPU profile REFINE = turbo beam 5 (+ ±0.5 s context, no extra RAM); GPU profile keeps large-v3 pending a broadcast-speech reference set (read speech is the easy case; spontaneous code-switched TV speech is where the larger decoder is expected to matter — must be measured, not assumed).
+* **Finding:** on this reference set large-v3 gives **no measurable accuracy gain** over turbo (WER within run-to-run noise of ~±2 pts — Whisper's temperature fallback samples), while costing more compute. Configured accordingly: CPU profile REFINE = turbo beam 5 (+ ±0.5 s context, no extra RAM); GPU profile keeps large-v3 (confirmed by the per-utterance comparison below) pending a broadcast-speech reference set (read speech is the easy case; spontaneous code-switched TV speech is where the larger decoder is expected to matter — must be measured, not assumed).
 * Capacity estimate (this CPU, segment mode): FAST+REFINE RTF = 2.225 → ≈ 0.3 channels at 70 % utilisation with refinement, ≈ 0.7 channels FAST-only (REFINE skipped under load). Derived from measured RTF on this programme's speech density.
+
+## Model comparison (FLEURS Urdu, per utterance)
+
+`python -m bench.eval_models --model large-v3-urdu --model large-v3 --model large-v3-turbo --every 3`
+→ `bench/results/eval_fleurs_models.json`. Every utterance is decoded on its own, the way ASR papers
+report accuracy (no VAD, segmentation or packing), so the pipeline doesn't affect the comparison.
+100 utterances (every 3rd of the FLEURS ur test split), 976 s of audio, 2,782 reference words.
+Settings: int8, beam 5, temperature 0, 8 threads, same laptop CPU as above.
+
+| Model | WER | CER | SER | Median WER per utterance | Outputs ≥ 2× ref length | RTF (CPU) |
+|---|---|---|---|---|---|---|
+| `large-v3-urdu` (kingabzpro, Common Voice 17 fine-tune, converted here) | 19.45 % | 7.97 % | 96 % | 18.2 % | 0 | 3.55 |
+| **`large-v3`** (stock, Systran CT2) | **19.95 %** | **7.70 %** | 95 % | 19.4 % | 0 | 2.62 |
+| `large-v3-turbo` (stock) | 21.14 % | 8.29 % | 98 % | 20.6 % | 0 | 1.40 |
+
+Paired bootstrap over utterances (5,000 resamples, seed 0):
+
+| Comparison | WER difference, 95 % CI | CER difference, 95 % CI | Per-utterance WER wins / losses |
+|---|---|---|---|
+| fine-tune − large-v3 | −1.51 … +0.57 pts | −0.36 … +1.00 pts | 36 / 25 |
+| large-v3 − turbo | −2.47 … +0.04 pts | −1.28 … +0.11 pts | 41 / 28 |
+| fine-tune − turbo | −3.00 … −0.35 pts | −1.20 … +0.62 pts | 50 / 25 |
+
+**Decision (GPU profile):** REFINE and uploads use **`large-v3` beam 5, float16**. FAST stays on turbo
+greedy for live latency.
+* The fine-tune's WER edge over large-v3 is within noise, and its CER is slightly worse.
+* It was 35 % slower in this run and needs a conversion step.
+* So the pinned stock model is the more reliable choice.
+* large-v3 beats turbo by about 1.2 WER points; the probability that large-v3 is better is 0.97 for WER and 0.95 for CER.
+
+SER is close to 100 % for every model because FLEURS references have their own spelling and spacing
+habits; WER and CER are the meaningful comparison. GPU speed has not been measured (no GPU available here).
 
 ## Hallucination guards on non-speech (`python -m bench.guard_eval`)
 

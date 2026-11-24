@@ -6,14 +6,18 @@ ingest:
 
 asr:
   device: cuda
-  compute_type: int8_float16   # or float16; decide from bench
+  compute_type: float16        # full-precision reference weights; int8_float16 = less VRAM, ~same WER
+  # FAST: turbo greedy for low-latency partials. REFINE (and uploads): large-v3 beam 5, the most
+  # accurate model measured (docs/MODELS.md, FLEURS ur per-utterance: large-v3 19.95 % WER /
+  # 7.70 % CER vs turbo 21.14 % / 8.29 %). The kingabzpro Urdu fine-tune scored 19.45 % / 7.97 %:
+  # within noise of large-v3, so the pinned stock model is kept (no conversion step).
   fast:   {model: large-v3-turbo, beam_size: 1, best_of: 1}
-  # large-v3 kept for REFINE on GPU; re-decide with `stt bench` on a real broadcast reference set
-  # (on the FLEURS read-speech set it was not better than turbo — see BENCHMARKS.md).
   refine: {model: large-v3, beam_size: 5, best_of: 5}
   batched: true
   max_batch: 16
   max_wait_ms: 50
+
+relay: {enabled: true, dir: var/hls, window_s: 900, segment_s: 2, archive_hours: 24}
 
 streaming:
   mode: auto               # local_agreement iff CUDA and measured RTF < 0.3

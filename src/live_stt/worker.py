@@ -264,7 +264,8 @@ def make_relay(settings: Settings, channel_id: str):
         return None
     from live_stt.ingest.relay import HlsRelay
 
-    return HlsRelay(resolve_path(r.dir) / channel_id, r.window_s, r.segment_s)
+    return HlsRelay(resolve_path(r.dir) / channel_id, r.window_s, r.segment_s,
+                    archive_hours=r.archive_hours)
 
 
 def run_worker(settings: Settings, channel_id: str, bus: Bus, max_connects: int | None = None,

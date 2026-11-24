@@ -41,6 +41,10 @@ class Decision:
     skipped: list[tuple[Job, str]]  # (job, reason)
 
 
+def _no_expire(j: Job) -> bool:
+    return isinstance(j.payload, dict) and bool(j.payload.get("no_expire"))
+
+
 class Scheduler:
     def __init__(
         self,
@@ -91,7 +95,10 @@ class Scheduler:
                 self.fast.append(job)
             else:
                 if len(self.refine) >= self.refine_max:
-                    self._skipped.append((self.refine.popleft(), "refine_queue_full"))
+                    victim = next((q for q in self.refine if not _no_expire(q)), None)
+                    if victim is not None:
+                        self.refine.remove(victim)
+                        self._skipped.append((victim, "refine_queue_full"))
                 self.refine.append(job)
             self._cv.notify_all()
 
@@ -114,9 +121,16 @@ class Scheduler:
         with self._cv:
             skipped, self._skipped = self._skipped, []
             now = self.wall()
-            # Expire stale refinements.
-            while self.refine and now - self.refine[0].t_enqueued > self.refine_max_lag_s:
-                skipped.append((self.refine.popleft(), "refine_lag"))
+            # Expire stale refinements (uploaded-file jobs carry no_expire: never dropped).
+            if self.refine and any(now - q.t_enqueued > self.refine_max_lag_s
+                                   and not _no_expire(q) for q in self.refine):
+                keep = deque()
+                for q in self.refine:
+                    if now - q.t_enqueued > self.refine_max_lag_s and not _no_expire(q):
+                        skipped.append((q, "refine_lag"))
+                    else:
+                        keep.append(q)
+                self.refine = keep
             for pass_, q in ((FAST, self.fast), (REFINE, self.refine)):
                 if not q:
                     continue

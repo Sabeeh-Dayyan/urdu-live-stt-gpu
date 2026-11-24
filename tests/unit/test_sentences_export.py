@@ -135,8 +135,7 @@ def _run_js_assemble(rows):
     node = shutil.which("node")
     if not node:
         pytest.skip("node not installed")
-    html = (Path(__file__).parents[2] / "ui" / "index.html").read_text(encoding="utf-8")
-    js = html.split("<script>")[1].split("</script>")[0]
+    js = (Path(__file__).parents[2] / "ui" / "common.js").read_text(encoding="utf-8")
     body = js[js.index("function wordOf("):js.index("const confClass")]
     prog = ("const END_CHARS = \"۔؟?!.…\", PAUSE_S = 1.0, MAX_SENT_S = 20.0;\n" + body +
             "\nconst rows = JSON.parse(require('fs').readFileSync(0, 'utf8'));"

@@ -1,0 +1,21 @@
+# Named keyword groups for topic search (UI "Archive & search") and reports.
+# A topic matches a transcript line when ANY of its terms occurs (case-insensitive, after the same
+# Urdu normalisation the transcripts get). Whisper writes most English words in Urdu script, so
+# list both spellings. Edit freely; the API re-reads this file on every request.
+topics:
+  - name: Prime Minister
+    terms: [وزیراعظم, وزیر اعظم, پرائم منسٹر, prime minister]
+  - name: President
+    terms: [صدر مملکت, صدرِ مملکت, صدر پاکستان, صدر, president]
+  - name: Army / ISPR
+    terms: [آرمی چیف, فوج, آئی ایس پی آر, پاک فوج, army]
+  - name: Parliament
+    terms: [قومی اسمبلی, پارلیمنٹ, سینیٹ, اسپیکر, parliament]
+  - name: Supreme Court
+    terms: [سپریم کورٹ, عدالت عظمی, عدالتِ عظمیٰ, چیف جسٹس, supreme court]
+  - name: Economy / IMF
+    terms: [معیشت, مہنگائی, آئی ایم ایف, بجٹ, ڈالر, imf]
+  - name: Weather
+    terms: [موسم, بارش, محکمہ موسمیات, گرمی, سردی]
+  - name: Cricket
+    terms: [کرکٹ, میچ, ٹیسٹ, ورلڈ کپ, cricket]

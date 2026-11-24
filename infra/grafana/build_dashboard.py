@@ -44,6 +44,19 @@ def panels() -> list[dict]:
     out = [{"id": 100, "type": "row", "title": "Live transcript & accuracy", "collapsed": False,
             "gridPos": {"x": 0, "y": y, "w": 24, "h": 1}, "panels": []}]
     y += 1
+    links = [("Live", "/"), ("Archive &amp; search", "/ui/archive"), ("Reports", "/ui/reports"),
+             ("Upload video", "/ui/uploads"), ("Channels", "/ui/channels"),
+             ("System &amp; all links", "/ui/system"), ("API docs", "/docs"), ("Health", "/health")]
+    out.append({
+        "id": 120, "type": "text", "title": "",
+        "description": "Links to every page of the live-stt web UI (uses the Player URL variable).",
+        "gridPos": {"x": 0, "y": y, "w": 24, "h": 2}, "transparent": True,
+        "options": {"mode": "html", "content": '<div style="display:flex;flex-wrap:wrap;gap:6px 14px;'
+                    'align-items:center;font-size:14px">' + "".join(
+                        f'<a href="{UI}{h}" target="_blank" rel="noopener">{t} ↗</a>'
+                        for t, h in links) + "</div>"},
+    })
+    y += 2
     out.append({
         "id": 101, "type": "text", "title": "Live player (video + transcript)",
         "description": "The live-stt web page embedded. Click any sentence to play the video from "

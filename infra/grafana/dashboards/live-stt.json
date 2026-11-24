@@ -2,7 +2,7 @@
  "uid": "live-stt",
  "title": "Live STT",
  "schemaVersion": 39,
- "version": 4,
+ "version": 5,
  "refresh": "5s",
  "time": {
   "from": "now-30m",
@@ -24,13 +24,30 @@
    "panels": []
   },
   {
+   "id": 120,
+   "type": "text",
+   "title": "",
+   "description": "Links to every page of the live-stt web UI (uses the Player URL variable).",
+   "gridPos": {
+    "x": 0,
+    "y": 1,
+    "w": 24,
+    "h": 2
+   },
+   "transparent": true,
+   "options": {
+    "mode": "html",
+    "content": "<div style=\"display:flex;flex-wrap:wrap;gap:6px 14px;align-items:center;font-size:14px\"><a href=\"${ui_url}/\" target=\"_blank\" rel=\"noopener\">Live ↗</a><a href=\"${ui_url}/ui/archive\" target=\"_blank\" rel=\"noopener\">Archive &amp; search ↗</a><a href=\"${ui_url}/ui/reports\" target=\"_blank\" rel=\"noopener\">Reports ↗</a><a href=\"${ui_url}/ui/uploads\" target=\"_blank\" rel=\"noopener\">Upload video ↗</a><a href=\"${ui_url}/ui/channels\" target=\"_blank\" rel=\"noopener\">Channels ↗</a><a href=\"${ui_url}/ui/system\" target=\"_blank\" rel=\"noopener\">System &amp; all links ↗</a><a href=\"${ui_url}/docs\" target=\"_blank\" rel=\"noopener\">API docs ↗</a><a href=\"${ui_url}/health\" target=\"_blank\" rel=\"noopener\">Health ↗</a></div>"
+   }
+  },
+  {
    "id": 101,
    "type": "text",
    "title": "Live player (video + transcript)",
    "description": "The live-stt web page embedded. Click any sentence to play the video from that moment; LIVE returns to the live edge.",
    "gridPos": {
     "x": 0,
-    "y": 1,
+    "y": 3,
     "w": 14,
     "h": 20
    },
@@ -50,7 +67,7 @@
    },
    "gridPos": {
     "x": 14,
-    "y": 1,
+    "y": 3,
     "w": 5,
     "h": 4
    },
@@ -112,7 +129,7 @@
    },
    "gridPos": {
     "x": 19,
-    "y": 1,
+    "y": 3,
     "w": 5,
     "h": 4
    },
@@ -166,7 +183,7 @@
    },
    "gridPos": {
     "x": 14,
-    "y": 5,
+    "y": 7,
     "w": 5,
     "h": 4
    },
@@ -231,7 +248,7 @@
    },
    "gridPos": {
     "x": 19,
-    "y": 5,
+    "y": 7,
     "w": 5,
     "h": 4
    },
@@ -288,7 +305,7 @@
    },
    "gridPos": {
     "x": 14,
-    "y": 9,
+    "y": 11,
     "w": 5,
     "h": 4
    },
@@ -345,7 +362,7 @@
    },
    "gridPos": {
     "x": 19,
-    "y": 9,
+    "y": 11,
     "w": 5,
     "h": 4
    },
@@ -402,7 +419,7 @@
    },
    "gridPos": {
     "x": 14,
-    "y": 13,
+    "y": 15,
     "w": 5,
     "h": 4
    },
@@ -467,7 +484,7 @@
    },
    "gridPos": {
     "x": 19,
-    "y": 13,
+    "y": 15,
     "w": 5,
     "h": 4
    },
@@ -532,7 +549,7 @@
    },
    "gridPos": {
     "x": 14,
-    "y": 17,
+    "y": 19,
     "w": 5,
     "h": 4
    },
@@ -589,7 +606,7 @@
    },
    "gridPos": {
     "x": 19,
-    "y": 17,
+    "y": 19,
     "w": 5,
     "h": 4
    },
@@ -646,7 +663,7 @@
    },
    "gridPos": {
     "x": 0,
-    "y": 21,
+    "y": 23,
     "w": 16,
     "h": 14
    },
@@ -799,7 +816,7 @@
    },
    "gridPos": {
     "x": 16,
-    "y": 21,
+    "y": 23,
     "w": 8,
     "h": 14
    },
@@ -832,7 +849,7 @@
    },
    "gridPos": {
     "x": 0,
-    "y": 35,
+    "y": 37,
     "w": 24,
     "h": 7
    },
@@ -863,7 +880,7 @@
    "collapsed": false,
    "gridPos": {
     "x": 0,
-    "y": 42,
+    "y": 44,
     "w": 24,
     "h": 1
    },
@@ -879,7 +896,7 @@
    },
    "gridPos": {
     "x": 0,
-    "y": 43,
+    "y": 45,
     "w": 12,
     "h": 8
    },
@@ -923,7 +940,7 @@
    },
    "gridPos": {
     "x": 12,
-    "y": 43,
+    "y": 45,
     "w": 12,
     "h": 8
    },
@@ -967,7 +984,7 @@
    },
    "gridPos": {
     "x": 0,
-    "y": 51,
+    "y": 53,
     "w": 12,
     "h": 8
    },
@@ -1011,7 +1028,7 @@
    },
    "gridPos": {
     "x": 12,
-    "y": 51,
+    "y": 53,
     "w": 12,
     "h": 8
    },
@@ -1055,7 +1072,7 @@
    },
    "gridPos": {
     "x": 0,
-    "y": 59,
+    "y": 61,
     "w": 12,
     "h": 8
    },
@@ -1094,7 +1111,7 @@
    },
    "gridPos": {
     "x": 12,
-    "y": 59,
+    "y": 61,
     "w": 12,
     "h": 8
    },
@@ -1138,7 +1155,7 @@
    },
    "gridPos": {
     "x": 0,
-    "y": 67,
+    "y": 69,
     "w": 8,
     "h": 8
    },
@@ -1177,7 +1194,7 @@
    },
    "gridPos": {
     "x": 8,
-    "y": 67,
+    "y": 69,
     "w": 8,
     "h": 8
    },
@@ -1216,7 +1233,7 @@
    },
    "gridPos": {
     "x": 16,
-    "y": 67,
+    "y": 69,
     "w": 8,
     "h": 8
    },
@@ -1255,7 +1272,7 @@
    },
    "gridPos": {
     "x": 0,
-    "y": 75,
+    "y": 77,
     "w": 12,
     "h": 8
    },
@@ -1294,7 +1311,7 @@
    },
    "gridPos": {
     "x": 12,
-    "y": 75,
+    "y": 77,
     "w": 12,
     "h": 8
    },
@@ -1338,7 +1355,7 @@
    },
    "gridPos": {
     "x": 0,
-    "y": 83,
+    "y": 85,
     "w": 12,
     "h": 8
    },
@@ -1377,7 +1394,7 @@
    },
    "gridPos": {
     "x": 12,
-    "y": 83,
+    "y": 85,
     "w": 12,
     "h": 8
    },

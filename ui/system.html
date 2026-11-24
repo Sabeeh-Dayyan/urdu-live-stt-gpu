@@ -1,0 +1,131 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>System &amp; Links</title>
+<link rel="stylesheet" href="/ui/common.css">
+<script src="/ui/common.js"></script>
+<style>
+  .links { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 240px), 1fr)); gap: 8px; }
+  .links a { display: block; border: 1px solid var(--line); border-radius: 8px; padding: 8px 10px; text-decoration: none; color: var(--ink); }
+  .links a:hover { border-color: var(--accent); }
+  .links a b { color: var(--accent); }
+  .links a span { display: block; font-size: 12px; color: var(--muted); }
+  .links a code { display: block; margin-top: 4px; }
+  .m { font-family: ui-monospace, Menlo, monospace; font-size: 11px; font-weight: 700; padding: 1px 5px; border-radius: 4px; border: 1px solid var(--line); }
+  .m.GET { color: var(--ok); } .m.POST, .m.PUT { color: var(--accent); } .m.PATCH { color: var(--warn); } .m.DELETE { color: var(--bad); }
+  td.p { font-family: ui-monospace, Menlo, monospace; font-size: 12px; overflow-wrap: anywhere; }
+  .kv { display: grid; grid-template-columns: max-content 1fr; gap: 2px 12px; font-size: 13px; }
+  .kv b { color: var(--muted); font-weight: 600; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="card">
+    <h2>Status <span id="st" class="pill">…</span></h2>
+    <div class="grid2">
+      <div><h3>Processes</h3><div class="scroll-x"><table class="t" id="procs"><thead><tr><th>Process</th><th>State</th><th>Restarts</th><th>Uptime</th></tr></thead><tbody></tbody></table></div></div>
+      <div><h3>This deployment</h3><div class="kv" id="dep"></div><h3>ASR queues</h3><div class="kv" id="asr"></div></div>
+    </div>
+  </div>
+  <div class="card"><h2>Pages</h2><div class="links" id="pages"></div></div>
+  <div class="card"><h2>Monitoring &amp; tools</h2><div class="links" id="tools"></div>
+    <p class="small muted">Grafana / Prometheus addresses come from the server config (<code>api.links</code>, env <code>STT_API__LINKS__GRAFANA</code> …); <code>{host}</code> is the address you opened this page on.</p></div>
+  <div class="card"><h2>API endpoints <span class="small muted" id="apin"></span></h2>
+    <p class="small muted">Every endpoint of this server, read live from its OpenAPI description. Click a GET link to open it; try any endpoint (including uploads and channel changes) in the <a href="/docs" target="_blank">interactive API docs</a>.</p>
+    <div class="scroll-x"><table class="t" id="api"><thead><tr><th>Method</th><th>Path</th><th>What it does</th><th>Open</th></tr></thead><tbody></tbody></table></div>
+  </div>
+</div>
+<script>
+"use strict";
+nav("system");
+const $ = (id) => document.getElementById(id);
+const card = (href, title, desc, ext) => `<a href="${esc(href)}"${ext ? ' target="_blank" rel="noopener"' : ""}><b>${esc(title)}${ext ? " ↗" : ""}</b><span>${esc(desc)}</span><code>${esc(href)}</code></a>`;
+
+(async () => {
+  const cfg = await loadConfig();
+  const L = cfg.links || {};
+  $("pages").innerHTML = [
+    ["/", "Live", "live captions + live video per channel, exports"],
+    ["/ui/archive", "Archive & search", "any time range with video + transcript, topic search"],
+    ["/ui/reports", "Reports", "custom-range or overall transcription reports"],
+    ["/ui/uploads", "Upload video", "transcribe a file"],
+    ["/ui/channels", "Channels", "add / edit stream URLs, enable / disable"],
+  ].map(([h, t, d]) => card(h, t, d)).join("");
+  const tools = [
+    [resolveLink(L.grafana || "{scheme}://{host}:3000/d/live-stt"), "Grafana dashboard", "pipeline metrics, latency, confidence, accuracy, transcript table", true],
+    [resolveLink(L.prometheus || "{scheme}://{host}:9090"), "Prometheus", "raw metrics and queries", true],
+    [resolveLink((L.prometheus || "{scheme}://{host}:9090").replace(/\/$/, "") + "/targets"), "Prometheus targets", "is every process being scraped?", true],
+    ["/docs", "Interactive API docs (Swagger)", "try every endpoint from the browser", true],
+    ["/redoc", "API reference (ReDoc)", "readable API documentation", true],
+    ["/openapi.json", "OpenAPI schema", "machine-readable API description", true],
+    ["/health", "Health (JSON)", "redis, database, every process heartbeat", true],
+    ["/metrics", "Metrics (Prometheus text)", "this API process's metrics", true],
+  ];
+  for (const [k, v] of Object.entries(L.extra || {})) tools.push([resolveLink(v), k, "configured link", true]);
+  $("tools").innerHTML = tools.map(t => card(...t)).join("");
+  const r = cfg.relay || {}, u = cfg.uploads || {}, a = cfg.asr || {};
+  $("dep").innerHTML = [["environment", cfg.environment], ["ASR device", a.device], ["fast model", a.fast], ["refine model", a.refine || "off"],
+    ["video relay", r.enabled ? `on · live window ${fmtDur(r.window_s)}` : "off"], ["video archive", r.archive_hours ? `${r.archive_hours} h` : "off"],
+    ["uploads", u.enabled ? `on · ≤ ${u.max_mb} MB · pass ${u.pass}` : "off"], ["API token", cfg.token_required ? "required for changes" : "not required"]]
+    .map(([k, v]) => `<b>${esc(k)}</b><span>${esc(v ?? "–")}</span>`).join("");
+  loadApi(); status(); setInterval(status, 5000);
+})();
+
+async function status() {
+  let h;
+  try { h = await (await fetch("/health")).json(); } catch (e) { $("st").textContent = "API unreachable"; $("st").className = "pill bad"; return; }
+  $("st").textContent = `${h.status} · redis ${h.redis ? "✓" : "✗"} · database ${h.db ? "✓" : "✗"}`;
+  $("st").className = "pill " + (h.status === "ok" ? "ok" : "bad");
+  const comp = h.components || {}, kids = (comp.supervisor || {}).children || {};
+  const tb = $("procs").querySelector("tbody"); tb.replaceChildren();
+  const names = Object.keys(kids).length ? Object.keys(kids) : Object.keys(comp);
+  for (const n of names.sort()) {
+    const k = kids[n] || {};
+    const tr = document.createElement("tr");
+    tr.innerHTML = `<td>${esc(n)}</td><td>${k.alive === undefined ? "<span class='pill'>heartbeat</span>" : k.alive ? "<span class='pill ok'>alive</span>" : "<span class='pill bad'>down</span>"}</td><td>${esc(k.restarts ?? "–")}</td><td>${k.uptime_s ? fmtDur(k.uptime_s) : "–"}</td>`;
+    tb.appendChild(tr);
+  }
+  if (!names.length) tb.innerHTML = `<tr><td colspan="4" class="muted">no heartbeats (is the supervisor running?)</td></tr>`;
+  const asr = Object.entries(comp).find(([k]) => k.startsWith("asr:"));
+  $("asr").innerHTML = asr ? [["device", asr[1].device], ["processed", asr[1].processed], ["fast queue", asr[1].fast_depth], ["refine queue", asr[1].refine_depth], ["fast lag", `${asr[1].fast_lag_s} s`]]
+    .map(([k, v]) => `<b>${esc(k)}</b><span>${esc(v)}</span>`).join("") : "<span class='muted'>ASR service not reporting</span>";
+}
+
+async function loadApi() {
+  let spec;
+  try { spec = await (await fetch("/openapi.json")).json(); } catch (e) { return; }
+  let first = null;
+  try { first = (await api("/channels"))[0]; } catch (e) { /* */ }
+  const cid = first ? first.id : "ch1";
+  const now = Math.floor(Date.now() / 1000);
+  const example = {
+    "/channels/{cid}/transcripts": `?from=${now - 3600}&limit=50`, "/channels/{cid}/export": `?format=srt&from=${now - 3600}`,
+    "/channels/{cid}/clip": `?from=${now - 120}&to=${now - 60}&format=mp4`, "/channels/{cid}/video/coverage": "",
+    "/search": "?topic=Prime%20Minister", "/reports": `?from=${now - 86400}&to=${now}`,
+    "/hls/{cid}/{name}": "", "/channels/{cid}/events": "",
+  };
+  const rows = [];
+  for (const [path, ops] of Object.entries(spec.paths || {})) {
+    for (const [m, op] of Object.entries(ops)) {
+      const M = m.toUpperCase();
+      const desc = (op.description || op.summary || "").split("\n")[0];
+      let href = null;
+      if (M === "GET" && !["/ui/{name}", "/ui/vendor/{name}", "/uploads/{uid}", "/uploads/{uid}/media"].includes(path)) {
+        let p = path.replace("{cid}", encodeURIComponent(cid));
+        if (path === "/hls/{cid}/{name}") p = p.replace("{name}", "index.m3u8");
+        if (!p.includes("{")) href = p + (example[path] || "");
+      }
+      rows.push([M, path, desc || op.summary || "", href]);
+    }
+  }
+  const order = { GET: 0, POST: 1, PUT: 2, PATCH: 3, DELETE: 4 };
+  rows.sort((a, b) => a[1].localeCompare(b[1]) || order[a[0]] - order[b[0]]);
+  $("apin").textContent = `(${rows.length})`;
+  $("api").querySelector("tbody").innerHTML = rows.map(([M, p, d, h]) =>
+    `<tr><td><span class="m ${M}">${M}</span></td><td class="p">${esc(p)}</td><td class="small">${esc(d)}</td><td>${h ? `<a href="${esc(h)}" target="_blank" rel="noopener">open ↗</a>` : `<a href="/docs" target="_blank" class="small">try in docs</a>`}</td></tr>`).join("");
+}
+</script>
+</body>
+</html>

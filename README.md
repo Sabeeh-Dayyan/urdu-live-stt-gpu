@@ -10,8 +10,16 @@ as MPEG-TS over UDP (unicast or multicast). It produces:
 - sentence-level UTC timestamps derived from the stream's own clock;
 - a web player that shows the channel's video next to the transcript (click a sentence to replay
   that moment);
-- exports (SRT, VTT, CSV, TXT, JSON), full-text search, a REST/WebSocket API, and Grafana
-  dashboards with live and measured accuracy metrics.
+- a **video archive**: watch any past time range (e.g. 14:00–15:00) with its transcript, and
+  download it as MP4;
+- **search and topics**: find every mention of a word or a saved topic (e.g. "Prime Minister" =
+  وزیراعظم, وزیر اعظم, پرائم منسٹر …), grouped into occurrences you can watch;
+- **reports** for a custom time range or everything stored (HTML/PDF, Markdown, JSON);
+- **file uploads**: transcribe a video or audio file and play it with a clickable transcript;
+- **channel management in the browser**: add a stream URL, edit, enable or disable it;
+- one **System & links** page listing every endpoint, Grafana, Prometheus and the API docs;
+- exports (SRT, VTT, CSV, TXT, JSON), a REST/WebSocket API, and Grafana dashboards with live and
+  measured accuracy metrics.
 
 **This is the GPU edition**: CUDA image, batched inference across channels, and streaming
 (LocalAgreement-2) mode for low latency on NVIDIA GPUs. It needs a Linux server with an NVIDIA GPU.
@@ -30,9 +38,11 @@ flowchart LR
   subgraph W["Channel worker — one process per channel"]
     ING["PyAV demux + decode"] --> CLK["PTS → UTC clock<br/>(wrap, discontinuity, drift)"]
     CLK --> VAD["Silero VAD<br/>(ONNX)"] --> SEG["Segmenter<br/>(pause / max length)"]
-    ING --> HLS["HLS video relay<br/>(stream copy)"]
+    ING --> HLS["HLS video relay + archive<br/>(stream copy, retention)"]
   end
   FEED --> ING
+  FILE["Uploaded files"] --> UPR["Uploads runner<br/>(same VAD / segmenter,<br/>low priority)"]
+  UPR -- "audio jobs" --> RQ
   SEG -- "audio jobs" --> RQ[("Redis Streams<br/>fast / refine queues")]
   RQ --> ASR["ASR service<br/>faster-whisper (CUDA, batched)<br/>FAST ≫ REFINE · guards"]
   ASR -- "transcript events" --> EV[("Redis Streams<br/>+ pub/sub")]
@@ -40,7 +50,7 @@ flowchart LR
   EV --> API["FastAPI<br/>REST + WebSocket"]
   PG --> API
   HLS --> API
-  API --> UI["Web UI<br/>live text + video · export"]
+  API --> UI["Web UI<br/>live · archive · search · reports<br/>uploads · channels · system"]
   PG --> GRAF["Grafana"]
   PROM["Prometheus"] --> GRAF
   W -. metrics .-> PROM
@@ -81,6 +91,18 @@ spontaneous broadcast speech is harder and its reference set is still being prep
 WER/CER after Urdu normalisation; run-to-run spread ≈ ±2 points. Real-time factor < 1 means faster
 than real time.
 
+### Model comparison (FLEURS Urdu test, 100 utterances decoded one by one, int8 beam 5)
+
+| Model | WER | CER | SER | RTF (CPU) |
+|---|---|---|---|---|
+| Urdu fine-tune `kingabzpro/whisper-large-v3-urdu` | 19.45 % | 7.97 % | 96 % | 3.55 |
+| **`large-v3`** (GPU REFINE + uploads) | **19.95 %** | **7.70 %** | 95 % | 2.62 |
+| `large-v3-turbo` | 21.14 % | 8.29 % | 98 % | 1.40 |
+
+The fine-tune's gain over large-v3 is within noise (paired bootstrap, docs/BENCHMARKS.md), so the
+pinned stock model is used. SER is near 100 % for every model because the FLEURS reference spelling differs
+from the model's spelling; see [docs/MODELS.md](docs/MODELS.md).
+
 ### What the confidence numbers mean (calibration)
 
 The UI and dashboards show **model confidence** (mean word probability). Measured against the
@@ -114,7 +136,7 @@ and streaming mode (see the GPU edition); **on GPU it has not been measured yet*
 | 4.5 h soak, looping programme with a timestamp reset every loop | 0 crashes or restarts, **0 lost segments** (1 868 emitted, 1 867 done, 2 in flight at stop). Worker/persister/API memory flat; ASR memory +≈130 MB/h (open issue) |
 | Clock | median drift −50 ms; re-anchors on every discontinuity |
 | Word timestamps vs true speech onsets (file input) | 0.13–0.21 s |
-| Automated tests | 188 unit + integration tests (property-based, real Redis/Postgres, real ffmpeg streams, live UDP, real model end-to-end) |
+| Automated tests | 201 unit + integration tests (property-based, real Redis/Postgres, real ffmpeg streams, live UDP, real model end-to-end) |
 
 ### Capacity
 
@@ -162,11 +184,16 @@ open http://localhost:8000
 | Feature | How |
 |---|---|
 | Live text + video | `http://SERVER:8000`: sentence timestamps, click a sentence to play the video from that moment, **LIVE** returns to the live edge. Confidence filter (default ≥ 90 %), low-confidence words underlined |
+| Watch a time range | **Archive & search** page: channel + date + from/to → video and transcript side by side, click any sentence to seek, download the video (MP4/TS) and transcript. API: `GET /hls/{id}/archive.m3u8?from=&to=`, `GET /channels/{id}/clip?from=&to=&format=mp4`, `GET /channels/{id}/video/coverage`. Video is kept `relay.archive_hours` (default 24 h on servers) |
+| Find a speech / topic | same page: words (`a \| b`) or a saved topic from `config/topics/topics.yaml`; hits a few minutes apart are grouped into occurrences with a **Watch** button. API: `GET /search?q=…&topic=…&from=&to=&channel=` → `results` + `clusters` |
+| Reports | **Reports** page: channel(s) or an uploaded file, custom period or *overall*, optional full transcript → HTML (print to PDF), Markdown or JSON. API: `GET /reports?channel=&from=&to=&format=html\|md\|json&transcript=true&topics=` |
+| Upload a file | **Upload video** page (drag and drop) or `curl -T clip.mp4 -H "Authorization: Bearer $STT_API_TOKEN" "http://SERVER:8000/uploads?filename=clip.mp4"`. Transcribed with the REFINE decoder after live work; viewer with clickable transcript, exports, report |
+| Channels | **Channels** page: add a stream URL (udp, rtp, srt, rtsp, rtmp, http(s)/HLS), edit, enable/disable, delete; the worker follows within ~10 s. API: `GET/POST /channels`, `PATCH/DELETE /channels/{id}` |
+| Everything in one place | **System & links** page: process status, ASR queues, links to Grafana, Prometheus, Swagger/ReDoc, and a clickable list of every API endpoint (read live from OpenAPI) |
 | Export | buttons per channel, or `GET /channels/{id}/export?format=srt\|vtt\|csv\|txt\|json&from=&to=&min_conf=&tz=Asia/Karachi` |
-| Search | search box, or `GET /search?q=…` (Urdu-normalised, trigram index) |
 | Live events | `WS /ws/live?channels=a,b` (`partial` / `final` / `refined` / `refine_skipped`, keyed by `segment_id`) |
 | Transcripts | `GET /channels/{id}/transcripts?from=&to=&pass=&min_conf=` (each row has `confidence` and `sentences[]`) |
-| Channels | `GET/POST /channels`, `PATCH /channels/{id}` (writes need `Authorization: Bearer <STT_API_TOKEN>`) |
+| Changes need the token | channel changes, uploads and deletions need `Authorization: Bearer <STT_API_TOKEN>`; in the browser press 🔑 in the top bar once |
 | Health / metrics | `GET /health`, Prometheus metrics per process |
 | Grafana | *Live STT* dashboard: embedded player, transcript table (click → video), live and range confidence, measured accuracy, latency, queues, RTF, stream health, clock drift. Every panel has an (i) explanation |
 
@@ -179,11 +206,13 @@ rejected. `./stt show-config -c <profile>` prints the merged result.
 ## Repository layout
 
 ```
-src/live_stt/   ingest/ (PyAV source, PTS clock, ring buffer, HLS relay)  vad/  streaming/
+src/live_stt/   ingest/ (PyAV source, PTS clock, ring buffer, HLS relay, archive)  vad/  streaming/
                 asr/ (service, scheduler, guards, backends/)  bus/  store/ (SQL migrations, persister)
-                api/  text/ (normalisation, sentences, confidence)  models.py  supervisor.py  cli.py
+                api/  text/ (normalisation, sentences, confidence)  reports.py  uploads.py
+                models.py  supervisor.py  cli.py
+ui/             live, archive & search, reports, uploads, channels, system pages (no build step)
 deploy/         docker-compose.yml (server stack), .env.example, prometheus/, grafana/
-config/         default.yaml + profiles, glossary, hallucination blocklist
+config/         default.yaml + profiles, topics/topics.yaml, glossary, hallucination blocklist
 infra/          Grafana dashboard + dev provisioning
 bench/          benchmark, calibration, live latency, soak tools; results/ (measured JSON)
 testbed/        UDP test senders, FLEURS reference set (CC-BY-4.0)
@@ -193,11 +222,15 @@ docs/           ARCHITECTURE · BENCHMARKS · DEPLOYMENT · RUNBOOK · PLAN (sta
 
 ## Known limitations
 
-* Accuracy is measured on read speech (WER ≈ 24 %). Broadcast speech (music beds, crosstalk,
-  code-switching) will be worse until measured with broadcast references. A guaranteed ≥ 90 %
-  accuracy would need a better model, e.g. an Urdu fine-tune (`asr.fast.model` accepts a local
-  CTranslate2 directory).
+* Accuracy is measured on read speech: WER ≈ 20–24 % depending on model and segmentation.
+  Broadcast speech (music beds, crosstalk, code-switching) will be worse until measured with
+  broadcast references. The best open Urdu fine-tune tested did not measurably beat large-v3
+  (docs/MODELS.md). Other models can be converted with `scripts/convert_whisper.py`.
 * Without punctuation from the model, sentence boundaries are estimated from pauses.
+* "Find the Prime Minister's speech" works by **words** (topics), not by recognising the voice:
+  speaker identification is not implemented.
+* On a CPU server, uploaded files share the CPU with live channels (live keeps priority, so a
+  long upload can take several times its duration while a channel is running).
 * ASR memory growth over long CPU runs (+≈130 MB/h) is not yet explained (see DEPLOYMENT.md §7).
 * The 4.5 h soak is not the 24 h target.
 

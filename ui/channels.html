@@ -1,0 +1,113 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Channels</title>
+<link rel="stylesheet" href="/ui/common.css">
+<script src="/ui/common.js"></script>
+<style>
+  .acts { display: flex; gap: 4px; flex-wrap: wrap; }
+  .acts button { font-size: 12px; padding: 2px 8px; }
+  td.url { font-family: ui-monospace, Menlo, monospace; font-size: 12px; overflow-wrap: anywhere; max-width: 340px; }
+  .chk { flex-direction: row !important; align-items: center; gap: 6px !important; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="card">
+    <h2 id="ftitle">Add a live channel</h2>
+    <div class="row">
+      <label>ID <input id="id" placeholder="news1" size="10"></label>
+      <label>Name <input id="name" placeholder="News 1" size="16"></label>
+      <label style="flex:1 1 300px">Stream URL <input id="url" placeholder="udp://@239.10.10.5:5000"></label>
+    </div>
+    <div class="row" style="margin-top:8px">
+      <label>Audio: language tag <input id="alang" placeholder="urd" size="5"></label>
+      <label>or PID <input id="apid" type="number" min="0" size="6"></label>
+      <label>or index <input id="aidx" type="number" min="0" value="0" size="3"></label>
+      <label>Speech language <select id="lang"><option value="ur">ur</option><option value="en">en</option><option value="hi">hi</option><option value="pa">pa</option><option value="ar">ar</option></select></label>
+      <label class="chk"><input id="en" type="checkbox" checked> enabled</label>
+      <button id="save" class="primary">Add channel</button>
+      <button id="cancel" hidden>Cancel edit</button>
+    </div>
+    <p class="small muted">Supported: <span id="schemes"></span>. Examples: multicast <code>udp://@239.10.10.5:5000</code>, unicast <code>udp://0.0.0.0:5001</code>, SRT <code>srt://host:9000?mode=caller</code>, HLS <code>https://host/live/index.m3u8</code>, RTMP <code>rtmp://host/app/stream</code>. The supervisor starts, restarts or stops the channel's worker within about 10 seconds of a change. Changes need the API token (🔑) when the server has one.</p>
+  </div>
+  <div class="card">
+    <h2>Channels</h2>
+    <div class="scroll-x"><table class="t" id="tbl"><thead><tr><th>ID</th><th>Name</th><th>URL</th><th>Audio</th><th>Enabled</th><th>Worker</th><th></th></tr></thead><tbody></tbody></table></div>
+    <p class="small muted">Channels defined in the server's YAML config are copied here on start; deleting one of those brings it back from the YAML at the next restart (disable it instead).</p>
+  </div>
+</div>
+<script>
+"use strict";
+nav("channels");
+const $ = (id) => document.getElementById(id);
+let editing = null, chans = [];
+loadConfig().then(c => { $("schemes").textContent = (c.url_schemes || []).map(s => s + "://").join(" "); });
+
+function track() {
+  const t = { index: parseInt($("aidx").value || "0", 10) || 0 };
+  if ($("apid").value) t.pid = parseInt($("apid").value, 10);
+  if ($("alang").value.trim()) t.language = $("alang").value.trim();
+  return t;
+}
+function resetForm() {
+  editing = null; $("ftitle").textContent = "Add a live channel"; $("save").textContent = "Add channel"; $("cancel").hidden = true;
+  $("id").disabled = false; for (const k of ["id", "name", "url", "alang", "apid"]) $(k).value = ""; $("aidx").value = "0"; $("en").checked = true; $("lang").value = "ur";
+}
+function edit(c) {
+  editing = c.id; $("ftitle").textContent = `Edit channel ${c.id}`; $("save").textContent = "Save changes"; $("cancel").hidden = false;
+  $("id").value = c.id; $("id").disabled = true; $("name").value = c.name || ""; $("url").value = c.url;
+  const t = c.audio_track || {}; $("alang").value = t.language || ""; $("apid").value = t.pid ?? ""; $("aidx").value = t.index ?? 0;
+  $("lang").value = c.language || "ur"; $("en").checked = !!c.enabled;
+  window.scrollTo({ top: 0, behavior: "smooth" });
+}
+$("cancel").onclick = resetForm;
+$("save").onclick = async () => {
+  const body = { name: $("name").value.trim(), url: $("url").value.trim(), audio_track: track(), language: $("lang").value, enabled: $("en").checked };
+  if (!body.url) return toast("URL is required", true);
+  try {
+    if (editing) { await api(`/channels/${encodeURIComponent(editing)}`, { method: "PATCH", json: body }); toast(`saved ${editing} — worker restarts within ~10 s`); }
+    else {
+      const id = $("id").value.trim(); if (!id) return toast("ID is required", true);
+      await api("/channels", { method: "POST", json: Object.assign({ id }, body) }); toast(`added ${id} — worker starts within ~10 s`);
+    }
+    resetForm(); load();
+  } catch (e) { toast(e.message, true); }
+};
+
+async function load() {
+  try { chans = await api("/channels"); } catch (e) { return toast(e.message, true); }
+  let comp = {}, sup = {};
+  try { const h = await (await fetch("/health")).json(); comp = h.components || {}; sup = (comp.supervisor || {}).children || {}; } catch (e) { /* */ }
+  const tb = $("tbl").querySelector("tbody"); tb.replaceChildren();
+  for (const c of chans) {
+    const w = comp["worker:" + c.id], ch = sup["worker:" + c.id];
+    const age = w ? Date.now() / 1000 - w.t : null;
+    const st = !c.enabled ? `<span class="pill">disabled</span>` : w && age < 30
+      ? `<span class="pill ok">running</span><div class="small muted">${w.segments ?? 0} segments · ${w.connects ?? 0} connects${ch ? ` · ${ch.restarts} restarts` : ""}</div>`
+      : `<span class="pill bad">not running</span><div class="small muted">${ch ? `restarts ${ch.restarts}, last exit ${ch.last_exit ?? "–"}` : "starting or no supervisor"}</div>`;
+    const t = c.audio_track || {};
+    const tr = document.createElement("tr");
+    tr.innerHTML = `<td><b>${esc(c.id)}</b></td><td>${esc(c.name)}</td><td class="url">${esc(c.url)}</td>
+      <td class="small">${t.pid != null ? "PID " + esc(t.pid) : t.language ? "lang " + esc(t.language) : "index " + esc(t.index ?? 0)} · ${esc(c.language)}</td>
+      <td><input type="checkbox" ${c.enabled ? "checked" : ""} title="enable / disable"></td><td>${st}</td>
+      <td class="acts"><button data-a="edit">Edit</button><a class="pill" href="/?ch=${encodeURIComponent(c.id)}">Live</a><a class="pill" href="/ui/archive?ch=${encodeURIComponent(c.id)}">Archive</a><button data-a="del">Delete</button></td>`;
+    tr.querySelector("input").onchange = async (e) => {
+      try { await api(`/channels/${encodeURIComponent(c.id)}`, { method: "PATCH", json: { enabled: e.target.checked } }); toast(`${c.id} ${e.target.checked ? "enabled" : "disabled"}`); load(); }
+      catch (err) { e.target.checked = !e.target.checked; toast(err.message, true); }
+    };
+    tr.querySelector("[data-a=edit]").onclick = () => edit(c);
+    tr.querySelector("[data-a=del]").onclick = async () => {
+      if (!confirm(`Delete channel ${c.id}? (its transcripts are kept)`)) return;
+      try { await api(`/channels/${encodeURIComponent(c.id)}`, { method: "DELETE" }); toast("deleted"); load(); } catch (e) { toast(e.message, true); }
+    };
+    tb.appendChild(tr);
+  }
+  if (!chans.length) tb.innerHTML = `<tr><td colspan="7" class="muted">No channels yet — add one above.</td></tr>`;
+}
+load(); setInterval(load, 10000);
+</script>
+</body>
+</html>

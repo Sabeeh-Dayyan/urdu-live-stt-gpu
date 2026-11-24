@@ -75,6 +75,15 @@ def persister(config: str = ConfigOpt):
 
 
 @app.command()
+def uploads(config: str = ConfigOpt):
+    """Run the uploaded-file transcription runner in the foreground."""
+    from live_stt.uploads import run_uploads
+
+    s = _init(config, proc="uploads")
+    run_uploads(s)
+
+
+@app.command()
 def api(config: str = ConfigOpt):
     """Run the HTTP/WebSocket API in the foreground."""
     from live_stt.api.app import run_api

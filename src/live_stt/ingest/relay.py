@@ -57,8 +57,14 @@ class TimestampRebaser:
 
 class HlsRelay:
     def __init__(self, outdir: str | Path, window_s: float = 900.0, segment_s: float = 2.0,
-                 retry_s: float = 5.0) -> None:
+                 retry_s: float = 5.0, archive_hours: float = 0.0) -> None:
         self.dir = Path(outdir)
+        self.archive_hours = archive_hours
+        self._index = None
+        self._last_indexed = 0.0
+        self._pl_mtime = 0.0
+        self._next_index_check = 0.0
+        self._next_retention = 0.0
         self.window_s = window_s
         self.segment_s = segment_s
         self.retry_s = retry_s
@@ -88,16 +94,30 @@ class HlsRelay:
             self.dir.mkdir(parents=True, exist_ok=True)
             playlist = self.dir / PLAYLIST
             self._sweep(playlist)
-            flags = ["delete_segments", "program_date_time", "independent_segments",
-                     "omit_endlist"]
+            flags = ["program_date_time", "independent_segments", "omit_endlist"]
             if playlist.exists() and playlist.stat().st_size > 0:
                 flags += ["append_list", "discont_start"]
-            self._out = av.open(str(playlist), "w", format="hls", options={
+            opts = {
                 "hls_time": f"{self.segment_s:g}",
                 "hls_list_size": str(max(3, math.ceil(self.window_s / self.segment_s))),
-                "hls_flags": "+".join(flags),
-                "hls_segment_filename": str(self.dir / SEGMENT_PATTERN),
-            })
+            }
+            if self.archive_hours > 0:
+                # Archive: keep segments (retention sweep deletes them), unique strftime names
+                # (+ a per-session token: the segment counter restarts on every reconnect).
+                from live_stt.ingest.archive import ArchiveIndex
+
+                tok = str(int(time.time()) % 1_000_000)
+                flags.append("second_level_segment_index")
+                opts.update(strftime="1", strftime_mkdir="1", hls_segment_filename=str(
+                    self.dir / "a" / "%Y%m%d" / f"seg_%Y%m%dT%H%M%S_{tok}_%%04d.ts"))
+                if self._index is None:
+                    self._index = ArchiveIndex(self.dir)
+                    self._last_indexed = self._index.last_t()
+            else:
+                flags.insert(0, "delete_segments")
+                opts["hls_segment_filename"] = str(self.dir / SEGMENT_PATTERN)
+            opts["hls_flags"] = "+".join(flags)
+            self._out = av.open(str(playlist), "w", format="hls", options=opts)
             self._omap = {s.index: self._out.add_stream_from_template(s)
                           for s in self._templates}
             self._rebase = TimestampRebaser()
@@ -113,6 +133,8 @@ class HlsRelay:
         try:
             if playlist.exists() and time.time() - playlist.stat().st_mtime > self.window_s:
                 playlist.unlink()
+            if self.archive_hours > 0:
+                return  # archived segments are removed by age (sweep_retention), not here
             keep = set(re.findall(r"seg_\d{8}\.ts", playlist.read_text())) \
                 if playlist.exists() else set()
             for f in self.dir.glob("seg_*.ts"):
@@ -129,6 +151,12 @@ class HlsRelay:
                 out.close()
             except Exception as e:  # noqa: BLE001
                 log.debug("relay_close_error", error=str(e))
+            if self._index is not None:  # the last segment is listed on close
+                try:
+                    self._pl_mtime = 0.0
+                    self.index_now()
+                except Exception as e:  # noqa: BLE001
+                    log.debug("archive_index_error", error=str(e))
 
     def _fail(self, what: str, e: Exception) -> None:
         self.errors += 1
@@ -171,3 +199,43 @@ class HlsRelay:
             self.packets += 1
         except Exception as e:  # noqa: BLE001
             self._fail("relay_mux_failed", e)
+            return
+        if self._index is not None:
+            self._archive_tick()
+
+    # ------------------------------------------------------------------- archive
+    def _archive_tick(self) -> None:
+        """Index segments ffmpeg has listed (≤ 1 check/s) and apply retention (every 10 min)."""
+        now = time.monotonic()
+        if now < self._next_index_check:
+            return
+        self._next_index_check = now + 1.0
+        try:
+            self.index_now()
+            if now >= self._next_retention:
+                self._next_retention = now + 600
+                from live_stt.ingest.archive import sweep_retention
+
+                n = sweep_retention(self.dir, self.archive_hours)
+                if n:
+                    log.info("archive_retention", removed=n, dir=str(self.dir))
+        except Exception as e:  # noqa: BLE001 - never disturb transcription
+            log.debug("archive_index_error", error=str(e))
+
+    def index_now(self) -> int:
+        from live_stt.ingest.archive import parse_playlist
+
+        playlist = self.dir / PLAYLIST
+        try:
+            mt = playlist.stat().st_mtime
+        except OSError:
+            return 0
+        if mt == self._pl_mtime:
+            return 0
+        self._pl_mtime = mt
+        new = [e for e in parse_playlist(playlist.read_text(), self.dir)
+               if e.t > self._last_indexed + 1e-3]
+        if new:
+            self._index.append(new)
+            self._last_indexed = new[-1].t
+        return len(new)

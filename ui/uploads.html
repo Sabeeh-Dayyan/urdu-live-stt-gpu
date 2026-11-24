@@ -1,0 +1,162 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Upload Video</title>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Nastaliq+Urdu:wght@400;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/ui/common.css">
+<script src="/ui/common.js"></script>
+<style>
+  .drop { border: 2px dashed var(--line); border-radius: 10px; padding: 18px; text-align: center; cursor: pointer; }
+  .drop.over { border-color: var(--accent); background: var(--badge); }
+  .acts { display: flex; gap: 4px; flex-wrap: wrap; }
+  .acts button { font-size: 12px; padding: 2px 8px; }
+  tr.open td { background: var(--hi); }
+  .tools { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin-top: 8px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="card">
+    <h2>Upload a video or audio file to transcribe</h2>
+    <div class="drop" id="drop">
+      <b>Drop a file here</b> or click to choose<br>
+      <span class="small muted" id="exts"></span>
+      <input id="file" type="file" hidden>
+    </div>
+    <div class="row" style="margin-top:8px">
+      <label>Language <select id="lang"><option value="ur" selected>Urdu (ur)</option><option value="en">English (en)</option><option value="hi">Hindi (hi)</option><option value="pa">Punjabi (pa)</option><option value="ar">Arabic (ar)</option></select></label>
+      <button id="send" class="primary" disabled>Upload &amp; transcribe</button>
+      <div style="flex:1 1 200px"><div class="bar"><span id="upbar" style="width:0"></span></div><div class="small muted" id="upmsg"></div></div>
+    </div>
+    <p class="small muted" id="how">Files are transcribed in the background with the most accurate decoder, after live channels (live captions keep priority). Large files on a CPU server can take longer than their duration.</p>
+  </div>
+
+  <div class="card">
+    <h2>Uploaded files</h2>
+    <div class="scroll-x"><table class="t" id="list"><thead><tr><th>File</th><th>Uploaded</th><th>Length</th><th>Status</th><th style="min-width:120px">Progress</th><th></th></tr></thead><tbody></tbody></table></div>
+  </div>
+
+  <div class="grid2" id="viewer" hidden>
+    <div class="card">
+      <h2 id="vtitle"></h2>
+      <div class="vid"><video id="video" controls playsinline></video><div class="msg" id="vmsg"></div></div>
+      <div class="tools">
+        <span class="muted small">Transcript:</span>
+        <button data-f="srt">SRT</button><button data-f="vtt">VTT</button><button data-f="csv">CSV</button>
+        <button data-f="txt">TXT</button><button data-f="json">JSON</button>
+        <button id="rep">Report</button>
+      </div>
+      <p class="small muted">SRT/VTT cue times are relative to the start of the file; CSV/TXT/JSON carry the time from the start too (column "start" is base time + offset).</p>
+    </div>
+    <div class="card">
+      <h2>Transcript <span class="small muted" id="tinfo"></span></h2>
+      <div class="lines" id="lines"></div>
+    </div>
+  </div>
+</div>
+<script>
+"use strict";
+nav("uploads");
+const $ = (id) => document.getElementById(id);
+const video = $("video"), lines = $("lines");
+let chosen = null, openUp = null, ups = [];
+
+(async () => {
+  const cfg = await loadConfig();
+  const u = cfg.uploads || {};
+  $("exts").textContent = `${(u.extensions || []).join(" ")} · up to ${u.max_mb || "?"} MB`;
+  if (u.enabled === false) { $("how").textContent = "Uploads are disabled on this server (uploads.enabled)."; $("send").disabled = true; }
+  refresh();
+  const p = new URLSearchParams(location.search).get("id");
+  if (p) openUpload(p);
+})();
+
+function pick(f) { chosen = f; $("send").disabled = !f; $("upmsg").textContent = f ? `${f.name} · ${(f.size / 1048576).toFixed(1)} MB` : ""; $("upbar").style.width = "0"; }
+$("drop").onclick = () => $("file").click();
+$("file").onchange = (e) => pick(e.target.files[0]);
+$("drop").ondragover = (e) => { e.preventDefault(); $("drop").classList.add("over"); };
+$("drop").ondragleave = () => $("drop").classList.remove("over");
+$("drop").ondrop = (e) => { e.preventDefault(); $("drop").classList.remove("over"); pick(e.dataTransfer.files[0]); };
+
+$("send").onclick = () => {
+  if (!chosen) return;
+  const xhr = new XMLHttpRequest();
+  xhr.open("PUT", `/uploads?${new URLSearchParams({ filename: chosen.name, language: $("lang").value })}`);
+  const tok = getToken(); if (tok) xhr.setRequestHeader("Authorization", "Bearer " + tok);
+  xhr.setRequestHeader("Content-Type", "application/octet-stream");
+  xhr.upload.onprogress = (e) => { if (e.lengthComputable) { $("upbar").style.width = (100 * e.loaded / e.total).toFixed(1) + "%"; $("upmsg").textContent = `uploading ${(100 * e.loaded / e.total).toFixed(0)}%`; } };
+  xhr.onload = () => {
+    $("send").disabled = false;
+    if (xhr.status === 201) { const j = JSON.parse(xhr.responseText); $("upmsg").textContent = "uploaded — transcription queued"; toast("Uploaded: " + j.filename); pick(null); refresh(); openUpload(j.id); }
+    else { let m = xhr.status + " " + xhr.statusText; try { m = JSON.parse(xhr.responseText).detail || m; } catch (e) { /* */ } if (xhr.status === 401) m += " — set the API token (🔑 top right)"; $("upmsg").textContent = m; toast(m, true); }
+  };
+  xhr.onerror = () => { $("send").disabled = false; toast("upload failed (network)", true); };
+  $("send").disabled = true;
+  xhr.send(chosen);
+};
+
+const statusPill = (u) => `<span class="pill ${u.status === "done" ? "ok" : u.status === "failed" ? "bad" : "warn"}">${esc(u.status)}</span>`;
+async function refresh() {
+  try { ups = await api("/uploads"); } catch (e) { return; }
+  const tb = $("list").querySelector("tbody");
+  tb.replaceChildren();
+  for (const u of ups) {
+    const tr = document.createElement("tr");
+    if (openUp && openUp.id === u.id) tr.className = "open";
+    tr.innerHTML = `<td><b>${esc(u.filename)}</b><div class="small muted">${esc(u.id)} · ${(u.size_bytes / 1048576).toFixed(1)} MB${u.has_video ? " · video" : ""}</div>${u.error ? `<div class="small err">${esc(u.error)}</div>` : ""}</td>
+      <td class="small">${fmtDateTime(u.created_at)}</td><td>${u.duration_s ? fmtDur(u.duration_s) : "–"}</td><td>${statusPill(u)}</td>
+      <td><div class="bar"><span style="width:${(100 * (u.progress || 0)).toFixed(0)}%"></span></div><div class="small muted">${u.segments_done}/${u.segments_sent} segments · ${fmtDur(u.decoded_s)} decoded</div></td>
+      <td class="acts"><button data-a="open">Open</button><button data-a="rep">Report</button><button data-a="del">Delete</button></td>`;
+    tr.querySelector("[data-a=open]").onclick = () => openUpload(u.id);
+    tr.querySelector("[data-a=rep]").onclick = () => window.open(`/reports?channel=${u.id}&tz=${encodeURIComponent(localTz())}&transcript=true`, "_blank");
+    tr.querySelector("[data-a=del]").onclick = async () => {
+      if (!confirm(`Delete ${u.filename} and its transcript?`)) return;
+      try { await api(`/uploads/${u.id}`, { method: "DELETE" }); toast("deleted"); if (openUp && openUp.id === u.id) { $("viewer").hidden = true; openUp = null; } refresh(); } catch (e) { toast(e.message, true); }
+    };
+    tb.appendChild(tr);
+  }
+  if (!ups.length) tb.innerHTML = `<tr><td colspan="6" class="muted">No uploads yet.</td></tr>`;
+  if (openUp) { const u = ups.find(x => x.id === openUp.id); if (u) { const was = openUp.status; openUp = u; if (u.status !== "done" || was !== "done") loadTranscript(); } }
+}
+setInterval(() => { if (ups.some(u => u.status === "queued" || u.status === "processing")) refresh(); }, 3000);
+
+async function openUpload(id) {
+  try { openUp = await api(`/uploads/${id}`); } catch (e) { return toast(e.message, true); }
+  $("viewer").hidden = false;
+  $("vtitle").textContent = openUp.filename;
+  $("vmsg").style.display = "none";
+  if (openUp.media_url) { video.src = openUp.media_url; video.poster = ""; }
+  else { video.removeAttribute("src"); $("vmsg").textContent = openUp.status === "done" || openUp.status === "processing" ? "no browser-playable copy of this file (transcript only)" : "media appears once processing starts"; $("vmsg").style.display = "block"; }
+  history.replaceState(null, "", "?id=" + id);
+  loadTranscript(); refresh();
+  $("viewer").scrollIntoView({ behavior: "smooth" });
+}
+async function loadTranscript() {
+  if (!openUp) return;
+  const u = openUp;
+  try {
+    let rows = [], to = null;
+    for (let page = 0; page < 30; page++) {
+      const q = new URLSearchParams({ limit: "1000" }); if (to) q.set("to", String(to));
+      const r = await api(`/channels/${u.id}/transcripts?${q}`);
+      rows = r.concat(rows); if (r.length < 1000) break; to = r[0].start_utc;
+    }
+    const sents = assemble(rows);
+    sentenceRows(lines, sents, {
+      label: (s) => fmtOffset(s.s - u.base_utc),
+      onClick: (s) => { video.currentTime = Math.max(0, s.s - u.base_utc); video.play().catch(() => {}); markPlaying(lines, s.s); },
+    });
+    $("tinfo").textContent = `${sents.length} sentences` + (u.status !== "done" ? ` · ${u.status}…` : "");
+  } catch (e) { $("tinfo").textContent = "error: " + e.message; }
+}
+video.addEventListener("timeupdate", () => { if (openUp) markPlaying(lines, openUp.base_utc + video.currentTime); });
+for (const b of document.querySelectorAll("[data-f]")) b.onclick = () => {
+  if (!openUp) return;
+  location.href = `/channels/${openUp.id}/export?${new URLSearchParams({ format: b.dataset.f, from: String(openUp.base_utc), tz: "UTC" })}`;
+};
+$("rep").onclick = () => openUp && window.open(`/reports?channel=${openUp.id}&tz=${encodeURIComponent(localTz())}&transcript=true`, "_blank");
+</script>
+</body>
+</html>

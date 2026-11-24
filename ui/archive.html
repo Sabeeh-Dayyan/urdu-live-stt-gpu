@@ -1,0 +1,260 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Archive &amp; Search</title>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Nastaliq+Urdu:wght@400;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/ui/common.css">
+<script src="/ui/vendor/hls.min.js"></script>
+<script src="/ui/common.js"></script>
+<style>
+  .quick button { font-size: 12px; padding: 3px 8px; }
+  .clusters .cl { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 8px; align-items: center; padding: 6px 4px; border-bottom: 1px solid var(--line); }
+  .clusters .cl .p { font-family: "Noto Nastaliq Urdu", serif; unicode-bidi: plaintext; font-size: 15px; line-height: 2; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .hits { max-height: 50vh; overflow-y: auto; }
+  .cov { font-size: 12px; }
+  .tools { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin-top: 8px; }
+  .tools .grow { flex: 1; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="card">
+    <h2>Watch a time range with its transcript</h2>
+    <div class="row">
+      <label>Channel <select id="ch"></select></label>
+      <label>Date <input id="date" type="date"></label>
+      <label>From <input id="from" type="time"></label>
+      <label>To <input id="to" type="time"></label>
+      <button id="load" class="primary">Load</button>
+      <span class="quick row">
+        <button data-q="900">last 15 min</button><button data-q="3600">last 1 h</button>
+        <button data-q="10800">last 3 h</button>
+      </span>
+    </div>
+    <div class="cov muted" id="cov" style="margin-top:6px"></div>
+  </div>
+
+  <div class="grid2">
+    <div class="card">
+      <h2 id="vtitle">Video</h2>
+      <div class="vid"><video id="video" controls playsinline></video><div class="msg" id="vmsg"></div></div>
+      <div class="tools">
+        <span class="muted small">Download video:</span>
+        <button data-clip="mp4">MP4</button><button data-clip="ts">TS</button>
+        <span class="grow"></span>
+        <button id="reportBtn" title="Open a report for this channel and time range">Report for this range</button>
+      </div>
+      <div class="tools">
+        <span class="muted small">Transcript:</span>
+        <button data-f="srt">SRT</button><button data-f="vtt">VTT</button><button data-f="csv">CSV</button>
+        <button data-f="txt">TXT</button><button data-f="json">JSON</button>
+      </div>
+      <p class="muted small" id="vnote">Pick a channel and a time range. Video is kept for the archive period configured on the server; transcripts are kept in the database.</p>
+    </div>
+    <div class="card">
+      <div class="row" style="justify-content:space-between">
+        <h2 id="ttitle" style="margin:0">Transcript</h2>
+        <label>Min confidence
+          <select id="minconf"><option value="0" selected>all</option><option value="0.8">≥ 80%</option><option value="0.9">≥ 90%</option></select>
+        </label>
+      </div>
+      <div class="small muted" id="tinfo"></div>
+      <div class="lines" id="lines"></div>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>Search transcripts / find a speech or topic</h2>
+    <div class="row">
+      <label style="flex:2 1 260px">Words (several: separate with | ) <input id="q" dir="auto" placeholder="e.g. وزیراعظم | وزیر اعظم"></label>
+      <label>Topic <select id="topic"><option value="">—</option></select></label>
+      <label>Channel <select id="sch"><option value="">all channels</option></select></label>
+      <label>Within <select id="swin">
+        <option value="range">the time range above</option><option value="86400">last 24 h</option>
+        <option value="604800" selected>last 7 days</option><option value="">all time</option></select></label>
+      <button id="go" class="primary">Search</button>
+    </div>
+    <p class="small muted">A topic is a saved list of words (config/topics/topics.yaml), e.g. "Prime Minister" = وزیراعظم, وزیر اعظم, پرائم منسٹر… Hits a few minutes apart are grouped into <b>occurrences</b>: each is usually one news item or speech. Press <b>Watch</b> to play it with its transcript.</p>
+    <div id="sres"></div>
+  </div>
+</div>
+<script>
+"use strict";
+nav("archive");
+const $ = (id) => document.getElementById(id);
+const video = $("video"), lines = $("lines");
+const params = new URLSearchParams(location.search);
+let hls = null, cur = null, sents = [], terms = [];   // cur = {cid, t0, t1, seekT}
+
+function vmsg(t) { $("vmsg").textContent = t || ""; $("vmsg").style.display = t ? "block" : "none"; }
+function setInputs(t0, t1) { const [d, a] = toInputs(t0), [, b] = toInputs(t1); $("date").value = d; $("from").value = a; $("to").value = b; }
+function readRange() {
+  const t0 = fromInputs($("date").value, $("from").value);
+  let t1 = fromInputs($("date").value, $("to").value);
+  if (t0 == null || t1 == null) throw new Error("set date, from and to");
+  if (t1 <= t0) t1 += 86400;   // e.g. 23:00 → 01:00 crosses midnight
+  return [t0, t1];
+}
+
+async function init() {
+  const cfg = await loadConfig();
+  const chans = await channelList();
+  for (const sel of [$("ch"), $("sch")]) for (const c of chans) sel.add(new Option(`${c.name} (${c.id})`, c.id));
+  try { for (const t of await api("/topics")) $("topic").add(new Option(t.name, t.name)); } catch (e) { /* none */ }
+  const ah = (cfg.relay || {}).archive_hours || 0;
+  $("vnote").textContent = !(cfg.relay || {}).enabled ? "Video relay is disabled on this server: transcripts only."
+    : ah > 0 ? `Video is archived for ${ah} h; transcripts are kept in the database. Range limit ${fmtDur((cfg.relay || {}).max_clip_s)}.`
+    : `No video archive configured (relay.archive_hours = 0): only the last ${fmtDur((cfg.relay || {}).window_s)} of video can be replayed.`;
+  const ch = params.get("ch"), t = parseFloat(params.get("t")), f = parseFloat(params.get("from")), to = parseFloat(params.get("to"));
+  if (ch) $("ch").value = ch;
+  if (ch && !isNaN(t)) { setInputs(t - 120, t + 600); load(t); }
+  else if (ch && !isNaN(f) && !isNaN(to)) { setInputs(f, to); load(f); }
+  else { const now = Date.now() / 1000; setInputs(now - 3600, now); }
+  coverage();
+}
+
+async function coverage() {
+  const cid = $("ch").value; if (!cid) return;
+  try {
+    const j = await api(`/channels/${encodeURIComponent(cid)}/video/coverage`);
+    $("cov").textContent = j.spans.length
+      ? "Video available: " + j.spans.slice(-6).map(s => `${fmtDateTime(s.from_utc)} → ${fmtLocal(s.to_utc)}`).join(" · ") + ` (${fmtDur(j.seconds)})`
+      : "No archived video for this channel yet.";
+  } catch (e) { $("cov").textContent = ""; }
+}
+
+async function fetchRows(cid, t0, t1) {   // newest-first pages of ≤ 1000 segments
+  let to = t1, all = [];
+  for (let page = 0; page < 30; page++) {
+    const q = new URLSearchParams({ from: String(t0), to: String(to), limit: "1000" });
+    const rows = await api(`/channels/${encodeURIComponent(cid)}/transcripts?${q}`);
+    all = rows.concat(all);
+    if (rows.length < 1000) break;
+    to = rows[0].start_utc;
+  }
+  const seen = new Map();
+  for (const r of all) seen.set(r.segment_id, r);
+  return [...seen.values()];
+}
+
+async function load(seekT) {
+  let t0, t1;
+  try { [t0, t1] = readRange(); } catch (e) { toast(e.message, true); return; }
+  const cid = $("ch").value;
+  if (!cid) { toast("no channel", true); return; }
+  cur = { cid, t0, t1 };
+  $("vtitle").textContent = `Video · ${cid} · ${fmtDateTime(t0)} → ${fmtLocal(t1)}`;
+  history.replaceState(null, "", `?ch=${encodeURIComponent(cid)}&from=${t0}&to=${t1}`);
+  // video
+  if (hls) { hls.destroy(); hls = null; }
+  video.removeAttribute("src"); vmsg("");
+  const src = `/hls/${encodeURIComponent(cid)}/archive.m3u8?from=${t0}&to=${t1}`;
+  try {
+    const r = await fetch(src, { method: "GET" });
+    if (!r.ok) { const j = await r.json().catch(() => ({})); vmsg(j.detail || "no video for this range"); }
+    else {
+      hls = hlsPlay(video, src, vmsg);
+      const seek = () => { if (seekT && !hlsSeekEpoch(hls, video, seekT)) vmsg(`no video at ${fmtLocal(seekT)}`); };
+      if (hls) hls.once(Hls.Events.LEVEL_LOADED, () => setTimeout(seek, 50)); else video.addEventListener("loadedmetadata", seek, { once: true });
+    }
+  } catch (e) { vmsg("video unavailable"); }
+  // transcript
+  $("tinfo").textContent = "loading…";
+  try {
+    const rows = await fetchRows(cid, t0, t1);
+    sents = assemble(rows);
+    renderT();
+    $("tinfo").textContent = `${sents.length} sentences · ${rows.length} segments` + (rows.length ? "" : " — nothing was transcribed in this range");
+    if (seekT) setTimeout(() => markPlaying(lines, seekT), 100);
+  } catch (e) { $("tinfo").textContent = "error: " + e.message; }
+}
+function renderT() {
+  const hidden = sentenceRows(lines, sents, {
+    terms, minConf: parseFloat($("minconf").value) || 0,
+    label: (s) => fmtLocal(s.s),
+    onClick: (s) => { if (!hlsSeekEpoch(hls, video, s.s)) vmsg(`no video at ${fmtLocal(s.s)}`); else { vmsg(""); video.play().catch(() => {}); } markPlaying(lines, s.s); },
+  });
+  if (hidden) $("tinfo").textContent += ` · ${hidden} below the confidence filter hidden`;
+}
+video.addEventListener("timeupdate", () => { const t = hlsTimeToEpoch(hls, video); if (t) markPlaying(lines, t); });
+
+// buttons
+$("load").onclick = () => { terms = []; load(); };
+$("ch").onchange = coverage;
+$("minconf").onchange = renderT;
+for (const b of document.querySelectorAll("[data-q]")) b.onclick = () => { const now = Date.now() / 1000; setInputs(now - +b.dataset.q, now); terms = []; load(); };
+for (const b of document.querySelectorAll("[data-clip]")) b.onclick = () => {
+  if (!cur) return toast("load a range first", true);
+  location.href = `/channels/${encodeURIComponent(cur.cid)}/clip?from=${cur.t0}&to=${cur.t1}&format=${b.dataset.clip}`;
+};
+for (const b of document.querySelectorAll("[data-f]")) b.onclick = () => {
+  if (!cur) return toast("load a range first", true);
+  const q = new URLSearchParams({ format: b.dataset.f, from: String(cur.t0), to: String(cur.t1), tz: localTz(), min_conf: $("minconf").value });
+  location.href = `/channels/${encodeURIComponent(cur.cid)}/export?${q}`;
+};
+$("reportBtn").onclick = () => {
+  if (!cur) return toast("load a range first", true);
+  window.open(`/reports?${new URLSearchParams({ channel: cur.cid, from: String(cur.t0), to: String(cur.t1), tz: localTz(), transcript: "true" })}`, "_blank");
+};
+
+// search
+async function search() {
+  const q = $("q").value.trim(), topic = $("topic").value;
+  if (!q && !topic) return toast("type words or pick a topic", true);
+  const p = new URLSearchParams({ limit: "1000" });
+  if (q) p.set("q", q);
+  if (topic) p.set("topic", topic);
+  if ($("sch").value) p.set("channel", $("sch").value);
+  const w = $("swin").value;
+  if (w === "range") { try { const [a, b] = readRange(); p.set("from", a); p.set("to", b); } catch (e) { return toast(e.message, true); } }
+  else if (w) p.set("from", String(Date.now() / 1000 - +w));
+  const box = $("sres");
+  box.textContent = "searching…";
+  try {
+    const j = await api("/search?" + p);
+    terms = (j.terms || []).filter(Boolean);
+    box.replaceChildren();
+    const h = document.createElement("h3");
+    h.textContent = `${j.results.length}${j.truncated ? "+" : ""} matching lines in ${j.clusters.length} occurrence(s)`;
+    box.appendChild(h);
+    const cl = document.createElement("div"); cl.className = "clusters";
+    for (const c of j.clusters.slice(0, 50)) {
+      const d = document.createElement("div"); d.className = "cl";
+      d.innerHTML = `<div><b></b> <span class="muted small"></span><div class="p" dir="auto"></div></div><button class="primary">▶ Watch</button>`;
+      d.querySelector("b").textContent = `${fmtDateTime(c.start_utc)} → ${fmtLocal(c.end_utc)}`;
+      d.querySelector(".muted").textContent = `${c.channel_id} · ${c.hits} mention(s) · ${fmtDur(c.end_utc - c.start_utc)}`;
+      highlightTerms(d.querySelector(".p"), c.preview, terms);
+      d.querySelector("button").onclick = () => watch(c.channel_id, c.start_utc - 30, c.end_utc + 60, c.start_utc);
+      cl.appendChild(d);
+    }
+    box.appendChild(cl);
+    const h2 = document.createElement("h3"); h2.textContent = "All matching lines (newest first)"; box.appendChild(h2);
+    const hits = document.createElement("div"); hits.className = "hits";
+    for (const r of j.results) {
+      const s = document.createElement("div"); s.className = "sent";
+      s.innerHTML = `<span class="t"><span></span><small></small></span><span class="txt" dir="auto"></span><span class="c"></span>`;
+      s.querySelector(".t span").textContent = fmtLocal(r.start_utc);
+      s.querySelector(".t small").textContent = new Date(r.start_utc * 1000).toLocaleDateString();
+      highlightTerms(s.querySelector(".txt"), r.text_raw, terms);
+      s.querySelector(".c").textContent = r.channel_id;
+      s.onclick = () => watch(r.channel_id, r.start_utc - 120, r.end_utc + 300, r.start_utc);
+      hits.appendChild(s);
+    }
+    box.appendChild(hits);
+  } catch (e) { box.textContent = "error: " + e.message; }
+}
+function watch(cid, t0, t1, seekT) {
+  $("ch").value = cid;
+  if (!$("ch").value) { $("ch").add(new Option(cid, cid)); $("ch").value = cid; }
+  setInputs(t0, t1);
+  window.scrollTo({ top: 0, behavior: "smooth" });
+  load(seekT); coverage();
+}
+$("go").onclick = search;
+$("q").addEventListener("keydown", (e) => { if (e.key === "Enter") search(); });
+init();
+</script>
+</body>
+</html>

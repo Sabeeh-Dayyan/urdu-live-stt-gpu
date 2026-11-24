@@ -1,6 +1,7 @@
 """Supervisor: starts and monitors child processes (spawn start method — macOS safe).
 
-Children: one ASR service, one persister, the API, and one worker per enabled channel.
+Children: one ASR service, one persister, the API, the uploads runner (``uploads.enabled``) and
+one worker per enabled channel.
 Channels come from the YAML config and, when PostgreSQL is reachable, the ``channels`` table
 (API-managed); the DB wins for ids present in both. The channel set is re-synced every
 ``sync_every_s``: new/enabled channels are started, removed/disabled ones stopped, changed ones
@@ -50,6 +51,10 @@ def child_main(kind: str, config: list[str] | None, arg: str | None, metrics_por
         from live_stt.store.persister import run_persister
 
         run_persister(s)
+    elif kind == "uploads":
+        from live_stt.uploads import run_uploads
+
+        run_uploads(s)
     elif kind == "selftest":  # used by tests: "crash:<seconds>:<exitcode>" or "sleep"
         parts = (arg or "sleep").split(":")
         time.sleep(float(parts[1]) if len(parts) > 1 else 3600)
@@ -127,6 +132,8 @@ class Supervisor:
         self._add(Child("persister", "persister", None, base + 2))
         if with_api:
             self._add(Child("api", "api", None, base))
+        if settings.uploads.enabled:
+            self._add(Child("uploads", "uploads", None, base + 3))
         self._worker_ports: dict[str, int] = {}
 
     def _add(self, c: Child) -> None:

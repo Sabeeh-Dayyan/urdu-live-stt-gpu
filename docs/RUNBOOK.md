@@ -38,6 +38,14 @@ The worker is the only UDP receiver, so the video costs no extra packets and sha
 transcript's timeline. Sentences older than the window play without video; the UI says so. The relay
 never stops transcription: on any error it logs `relay_mux_failed` / `relay_open_failed` and retries
 after 5 s. Each reconnect adds an `EXT-X-DISCONTINUITY`.
+
+**Archive** (`relay.archive_hours` > 0; dev broadcast profile 6 h, servers 24 h): segments are kept
+under `var/hls/<channel>/a/YYYYMMDD/` and indexed in `var/hls/<channel>/archive/YYYYMMDD.idx`
+(start, duration, path). Older segments are deleted every 10 min. Check:
+`curl -s localhost:8000/channels/ch1/video/coverage` (spans of available video),
+`du -sh var/hls/*`. A range plays at `/ui/archive?ch=ch1&from=<epoch>&to=<epoch>`; clips:
+`/channels/ch1/clip?from=…&to=…&format=mp4|ts` (≤ `relay.max_clip_s`, default 4 h). MP4 falls back
+to TS when the audio codec does not fit MP4 (e.g. MPEG-1 Layer II).
 **Seek accuracy:** segments carry `PROGRAM-DATE-TIME` from the host clock at muxer start. Transcript
 times come from the PTS clock. The two agree to within the clock's startup correction, a few
 hundred ms. This is not yet measured on the broadcast feeds.
@@ -50,6 +58,8 @@ row as `asr_segments.confidence`. Measured accuracy only comes from reference tr
 table `accuracy_results` → Grafana "Measured accuracy" panels.
 
 ## 2. Add a channel
+
+Browser: `/ui/channels` → 🔑 (token, if `api.token` is set) → **Add channel**. Or:
 
 ```bash
 curl -s -X POST localhost:8000/channels -H 'content-type: application/json' -d '{
@@ -72,6 +82,19 @@ curl -s -X PATCH localhost:8000/channels/ptv_news -H 'content-type: application/
 ```
 A changed URL/track/language restarts only that worker (open segment is flushed first).
 Channels listed in YAML are seeded into the DB once; afterwards the DB is the source of truth.
+Remove: `curl -X DELETE localhost:8000/channels/ptv_news` (transcripts stay; a YAML channel comes
+back at the next start — disable it instead).
+
+### Uploaded files
+
+`/ui/uploads` or `curl -T clip.mp4 "localhost:8000/uploads?filename=clip.mp4"` (plus the token
+header when set). The `uploads` child (supervisor) decodes the file, segments it with the same VAD
+(20 s segments) and sends at most 2 segments at a time to the REFINE queue (`uploads.pass`), so live
+channels keep priority. Status: `GET /uploads/{id}` (`queued` → `processing` → `done`/`failed`,
+`decoded_s`, `segments_sent/done`). Files live in `var/uploads/<id>/` until deleted
+(`DELETE /uploads/{id}` also deletes the transcript). A crash re-queues the file; re-processing is
+idempotent. If an upload stays `processing` with no progress for `uploads.stall_timeout_s`
+(30 min), it fails with "no transcription progress (is the ASR service running?)".
 
 ## 4. Stream problems
 

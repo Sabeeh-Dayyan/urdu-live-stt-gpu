@@ -14,6 +14,9 @@ x-app: &app
     STT_BUS__REDIS_URL: redis://127.0.0.1:${REDIS_PORT:-6379}/0
     STT_API__TOKEN: ${STT_API_TOKEN:?set STT_API_TOKEN in deploy/.env}
     STT_API__PORT: ${STT_API_PORT:-8000}
+    STT_API__LINKS__GRAFANA: "{scheme}://{host}:${GRAFANA_PORT:-3000}/d/live-stt"
+    STT_RELAY__ARCHIVE_HOURS: ${STT_ARCHIVE_HOURS:-24}
+    STT_UPLOADS__MAX_MB: ${STT_UPLOAD_MAX_MB:-4096}
     HF_TOKEN: ${HF_TOKEN:-}
     STT_ASR__DEVICE_INDEX: ${STT_GPU_INDEX:-0}
   volumes:

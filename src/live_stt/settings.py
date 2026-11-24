@@ -71,6 +71,11 @@ class RelayConfig(_Model):
     dir: str = "var/hls"  # <dir>/<channel_id>/index.m3u8
     window_s: float = 900.0  # how far back a sentence can be replayed with video
     segment_s: float = 2.0  # should match the stream's GOP (broadcast test feeds: GOP 50 @ 25 fps = 2 s)
+    # Video archive: keep every segment this many hours (0 = only the rolling window above) so any
+    # past time range can be replayed / downloaded with its transcript. Disk ≈ bitrate × hours,
+    # e.g. 2.5 Mb/s ≈ 1.1 GB per channel-hour.
+    archive_hours: float = 0.0
+    max_clip_s: float = 4 * 3600.0  # longest range served as one playlist / download
 
 
 class ClockConfig(_Model):
@@ -169,12 +174,38 @@ class DbConfig(_Model):
     flush_rows: int = 100
 
 
+class LinksConfig(_Model):
+    """External tools shown on the UI's System page. ``{scheme}`` / ``{host}`` are replaced in the
+    browser with the address the UI was opened on, so the defaults work on any server."""
+
+    grafana: str = "{scheme}://{host}:3000/d/live-stt"
+    prometheus: str = "{scheme}://{host}:9090"
+    extra: dict[str, str] = {}
+
+
 class ApiConfig(_Model):
     host: str = "0.0.0.0"
     port: int = 8000
     # When set, write endpoints (POST/PATCH /channels) require "Authorization: Bearer <token>".
     # Set it on any server reachable by others: STT_API__TOKEN=... (read endpoints stay open).
     token: str | None = None
+    links: LinksConfig = LinksConfig()
+    topics_path: str = "config/topics/topics.yaml"  # named keyword groups for topic search / reports
+
+
+class UploadsConfig(_Model):
+    """Uploaded video/audio files transcribed by the ``uploads`` process through the same ASR
+    service, at low priority (at most ``max_inflight`` segments of an upload in the queue)."""
+
+    enabled: bool = True
+    dir: str = "var/uploads"
+    max_mb: int = 4096
+    pass_: Literal["refine", "fast"] = Field(default="refine", alias="pass")  # refine = accuracy
+    max_segment_s: float = 20.0  # longer segments than live: more context, fewer encoder passes
+    max_inflight: int = 2
+    stall_timeout_s: float = 1800.0  # give up waiting for transcripts after this long w/o progress
+
+    model_config = {"populate_by_name": True, "extra": "forbid"}
 
 
 class MetricsConfig(_Model):
@@ -206,6 +237,7 @@ class Settings(BaseSettings):
     bus: BusConfig = BusConfig()
     db: DbConfig = DbConfig()
     api: ApiConfig = ApiConfig()
+    uploads: UploadsConfig = UploadsConfig()
     metrics: MetricsConfig = MetricsConfig()
     logging: LoggingConfig = LoggingConfig()
     channels: list[ChannelConfig] = []
