@@ -13,6 +13,7 @@
   .clusters .cl { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 8px; align-items: center; padding: 6px 4px; border-bottom: 1px solid var(--line); }
   .clusters .cl .p { font-family: "Noto Nastaliq Urdu", serif; unicode-bidi: plaintext; font-size: 15px; line-height: 2; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .hits { max-height: 50vh; overflow-y: auto; }
+  .clusters .cl .p { font-size: 17px; }
   .cov { font-size: 12px; }
   .tools { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin-top: 8px; }
   .tools .grow { flex: 1; }
@@ -20,63 +21,63 @@
 </head>
 <body>
 <div class="wrap">
+  <div class="page-title"><h1>Find a moment</h1><p>Watch any time range with its transcript, or search for a person, place or topic.</p></div>
   <div class="card">
-    <h2>Watch a time range with its transcript</h2>
     <div class="row">
-      <label>Channel <select id="ch"></select></label>
+      <label id="chWrap">Channel <select id="ch"></select></label>
       <label>Date <input id="date" type="date"></label>
-      <label>From <input id="from" type="time"></label>
-      <label>To <input id="to" type="time"></label>
-      <button id="load" class="primary">Load</button>
+      <label>From <input id="from" type="time" step="1"></label>
+      <label>To <input id="to" type="time" step="1"></label>
+      <button id="load" class="primary">▶ Show</button>
       <span class="quick row">
-        <button data-q="900">last 15 min</button><button data-q="3600">last 1 h</button>
-        <button data-q="10800">last 3 h</button>
+        <button data-q="900">last 15 min</button><button data-q="3600">last hour</button>
+        <button data-q="10800">last 3 hours</button>
       </span>
     </div>
-    <div class="cov muted" id="cov" style="margin-top:6px"></div>
+    <div class="cov muted" id="cov" style="margin-top:8px"></div>
   </div>
 
-  <div class="grid2">
+  <div class="split">
     <div class="card">
-      <h2 id="vtitle">Video</h2>
+      <div class="chead"><h2 id="vtitle">Video</h2></div>
       <div class="vid"><video id="video" controls playsinline></video><div class="msg" id="vmsg"></div></div>
       <div class="tools">
-        <span class="muted small">Download video:</span>
-        <button data-clip="mp4">MP4</button><button data-clip="ts">TS</button>
+        <span class="muted small">Download this range:</span>
+        <button data-clip="mp4">Video (MP4)</button>
+        <select id="tf" title="Transcript format">
+          <option value="txt">Transcript (.txt)</option><option value="srt">Subtitles (.srt)</option><option value="vtt">Subtitles (.vtt)</option>
+          <option value="csv">Spreadsheet (.csv)</option><option value="json">JSON</option></select>
+        <button id="tdl">⬇ Transcript</button>
         <span class="grow"></span>
-        <button id="reportBtn" title="Open a report for this channel and time range">Report for this range</button>
+        <button id="reportBtn" title="Open a printable report for this time range">📄 Report</button>
       </div>
-      <div class="tools">
-        <span class="muted small">Transcript:</span>
-        <button data-f="srt">SRT</button><button data-f="vtt">VTT</button><button data-f="csv">CSV</button>
-        <button data-f="txt">TXT</button><button data-f="json">JSON</button>
-      </div>
-      <p class="muted small" id="vnote">Pick a channel and a time range. Video is kept for the archive period configured on the server; transcripts are kept in the database.</p>
+      <p class="muted small" id="vnote">Pick a time range and press Show.</p>
     </div>
-    <div class="card">
-      <div class="row" style="justify-content:space-between">
-        <h2 id="ttitle" style="margin:0">Transcript</h2>
-        <label>Min confidence
-          <select id="minconf"><option value="0" selected>all</option><option value="0.8">≥ 80%</option><option value="0.9">≥ 90%</option></select>
-        </label>
+    <div class="card tcard">
+      <div class="chead">
+        <h2 id="ttitle">Transcript</h2>
+        <span class="grow"></span>
+        <label class="small muted"><input type="checkbox" id="onlyClear"> only clear sentences</label>
+        <span><button id="szDown" title="Smaller text">A−</button> <button id="szUp" title="Larger text">A+</button></span>
       </div>
-      <div class="small muted" id="tinfo"></div>
-      <div class="lines" id="lines"></div>
+      <div class="small muted" id="tinfo">Click a line to play the video from there.</div>
+      <div class="lines" id="lines"><div class="empty">Nothing loaded yet.</div></div>
     </div>
   </div>
 
-  <div class="card">
-    <h2>Search transcripts / find a speech or topic</h2>
+  <div class="card" id="searchCard">
+    <h2>Find a speech or topic</h2>
     <div class="row">
       <label style="flex:2 1 260px">Words (several: separate with | ) <input id="q" dir="auto" placeholder="e.g. وزیراعظم | وزیر اعظم"></label>
-      <label>Topic <select id="topic"><option value="">—</option></select></label>
-      <label>Channel <select id="sch"><option value="">all channels</option></select></label>
-      <label>Within <select id="swin">
-        <option value="range">the time range above</option><option value="86400">last 24 h</option>
-        <option value="604800" selected>last 7 days</option><option value="">all time</option></select></label>
+      <label>or a saved topic <select id="topic"><option value="">—</option></select></label>
+      <label id="schWrap">Channel <select id="sch"><option value="">all channels</option></select></label>
+      <label>When <select id="swin">
+        <option value="range">the time range above</option><option value="86400">last 24 hours</option>
+        <option value="604800" selected>last 7 days</option><option value="">any time</option></select></label>
       <button id="go" class="primary">Search</button>
     </div>
-    <p class="small muted">A topic is a saved list of words (config/topics/topics.yaml), e.g. "Prime Minister" = وزیراعظم, وزیر اعظم, پرائم منسٹر… Hits a few minutes apart are grouped into <b>occurrences</b>: each is usually one news item or speech. Press <b>Watch</b> to play it with its transcript.</p>
+    <p class="small muted">Example: the <b>Prime Minister</b> topic finds وزیراعظم, وزیر اعظم, پرائم منسٹر… Mentions a few minutes apart are grouped into one <b>occurrence</b>
+      (usually one news item or speech). Press <b>▶ Watch</b> to play it with its transcript. Topics live in <code>config/topics/topics.yaml</code>.</p>
     <div id="sres"></div>
   </div>
 </div>
@@ -100,8 +101,10 @@ function readRange() {
 
 async function init() {
   const cfg = await loadConfig();
-  const chans = await channelList();
-  for (const sel of [$("ch"), $("sch")]) for (const c of chans) sel.add(new Option(`${c.name} (${c.id})`, c.id));
+  const { chans, cur: main } = await mainChannel();
+  for (const sel of [$("ch"), $("sch")]) for (const c of chans) sel.add(new Option(c.name, c.id));
+  if (main) $("ch").value = main.id;
+  if (chans.filter(c => c.enabled !== false).length <= 1) { $("chWrap").style.display = "none"; $("schWrap").style.display = "none"; }
   try { for (const t of await api("/topics")) $("topic").add(new Option(t.name, t.name)); } catch (e) { /* none */ }
   const ah = (cfg.relay || {}).archive_hours || 0;
   $("vnote").textContent = !(cfg.relay || {}).enabled ? "Video relay is disabled on this server: transcripts only."
@@ -111,8 +114,9 @@ async function init() {
   if (ch) $("ch").value = ch;
   if (ch && !isNaN(t)) { setInputs(t - 120, t + 600); load(t); }
   else if (ch && !isNaN(f) && !isNaN(to)) { setInputs(f, to); load(f); }
-  else { const now = Date.now() / 1000; setInputs(now - 3600, now); }
+  else if ($("ch").value) { const now = Date.now() / 1000; setInputs(now - 900, now); load(); }   // never open empty
   coverage();
+  if (params.get("q")) { $("q").value = params.get("q"); $("swin").value = "604800"; search(); $("searchCard").scrollIntoView({ behavior: "smooth" }); }
 }
 
 async function coverage() {
@@ -145,7 +149,7 @@ async function load(seekT) {
   const cid = $("ch").value;
   if (!cid) { toast("no channel", true); return; }
   cur = { cid, t0, t1 };
-  $("vtitle").textContent = `Video · ${cid} · ${fmtDateTime(t0)} → ${fmtLocal(t1)}`;
+  $("vtitle").textContent = `${fmtDateTime(t0)} → ${fmtLocal(t1)}`;
   history.replaceState(null, "", `?ch=${encodeURIComponent(cid)}&from=${t0}&to=${t1}`);
   // video
   if (hls) { hls.destroy(); hls = null; }
@@ -172,26 +176,30 @@ async function load(seekT) {
 }
 function renderT() {
   const hidden = sentenceRows(lines, sents, {
-    terms, minConf: parseFloat($("minconf").value) || 0,
+    terms, minConf: $("onlyClear").checked ? 0.9 : 0,
     label: (s) => fmtLocal(s.s),
     onClick: (s) => { if (!hlsSeekEpoch(hls, video, s.s)) vmsg(`no video at ${fmtLocal(s.s)}`); else { vmsg(""); video.play().catch(() => {}); } markPlaying(lines, s.s); },
   });
   if (hidden) $("tinfo").textContent += ` · ${hidden} below the confidence filter hidden`;
 }
-video.addEventListener("timeupdate", () => { const t = hlsTimeToEpoch(hls, video); if (t) markPlaying(lines, t); });
+let holdA = 0;   // the user scrolled the transcript: stop following the video for 15 s
+for (const ev of ["wheel", "touchmove", "keydown"]) lines.addEventListener(ev, () => { holdA = Date.now() + 15000; }, { passive: true });
+video.addEventListener("timeupdate", () => { const t = hlsTimeToEpoch(hls, video); if (t) markPlaying(lines, t, { scroll: Date.now() > holdA }); });
 
 // buttons
 $("load").onclick = () => { terms = []; load(); };
 $("ch").onchange = coverage;
-$("minconf").onchange = renderT;
+$("onlyClear").onchange = renderT;
+$("szUp").onclick = () => { urduSize(2); };
+$("szDown").onclick = () => { urduSize(-2); };
 for (const b of document.querySelectorAll("[data-q]")) b.onclick = () => { const now = Date.now() / 1000; setInputs(now - +b.dataset.q, now); terms = []; load(); };
 for (const b of document.querySelectorAll("[data-clip]")) b.onclick = () => {
   if (!cur) return toast("load a range first", true);
   location.href = `/channels/${encodeURIComponent(cur.cid)}/clip?from=${cur.t0}&to=${cur.t1}&format=${b.dataset.clip}`;
 };
-for (const b of document.querySelectorAll("[data-f]")) b.onclick = () => {
+$("tdl").onclick = () => {
   if (!cur) return toast("load a range first", true);
-  const q = new URLSearchParams({ format: b.dataset.f, from: String(cur.t0), to: String(cur.t1), tz: localTz(), min_conf: $("minconf").value });
+  const q = new URLSearchParams({ format: $("tf").value, from: String(cur.t0), to: String(cur.t1), tz: localTz(), min_conf: $("onlyClear").checked ? "0.9" : "0" });
   location.href = `/channels/${encodeURIComponent(cur.cid)}/export?${q}`;
 };
 $("reportBtn").onclick = () => {
@@ -224,7 +232,7 @@ async function search() {
       const d = document.createElement("div"); d.className = "cl";
       d.innerHTML = `<div><b></b> <span class="muted small"></span><div class="p" dir="auto"></div></div><button class="primary">▶ Watch</button>`;
       d.querySelector("b").textContent = `${fmtDateTime(c.start_utc)} → ${fmtLocal(c.end_utc)}`;
-      d.querySelector(".muted").textContent = `${c.channel_id} · ${c.hits} mention(s) · ${fmtDur(c.end_utc - c.start_utc)}`;
+      d.querySelector(".muted").textContent = `${c.hits} mention(s) · ${fmtDur(c.end_utc - c.start_utc)}`;
       highlightTerms(d.querySelector(".p"), c.preview, terms);
       d.querySelector("button").onclick = () => watch(c.channel_id, c.start_utc - 30, c.end_utc + 60, c.start_utc);
       cl.appendChild(d);
@@ -238,7 +246,7 @@ async function search() {
       s.querySelector(".t span").textContent = fmtLocal(r.start_utc);
       s.querySelector(".t small").textContent = new Date(r.start_utc * 1000).toLocaleDateString();
       highlightTerms(s.querySelector(".txt"), r.text_raw, terms);
-      s.querySelector(".c").textContent = r.channel_id;
+      s.querySelector(".c").textContent = "";
       s.onclick = () => watch(r.channel_id, r.start_utc - 120, r.end_utc + 300, r.start_utc);
       hits.appendChild(s);
     }
@@ -249,7 +257,7 @@ function watch(cid, t0, t1, seekT) {
   $("ch").value = cid;
   if (!$("ch").value) { $("ch").add(new Option(cid, cid)); $("ch").value = cid; }
   setInputs(t0, t1);
-  window.scrollTo({ top: 0, behavior: "smooth" });
+  document.querySelector(".split").scrollIntoView({ behavior: "smooth" });
   load(seekT); coverage();
 }
 $("go").onclick = search;

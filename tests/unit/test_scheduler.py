@@ -136,3 +136,23 @@ def test_packing_never_includes_partials_or_stream_jobs():
     s.push(job(5, dur=1))
     assert [x.msg_id for x in s.next().jobs] == ["3"]
     assert [x.msg_id for x in s.next().jobs] == ["4"]
+
+
+def test_fast_lag_load_shedding_skips_stale_live_jobs_only():
+    w = Clock(2000.0)
+    s = Scheduler(fast_max_lag_s=120, wall=w)
+    s.push(job(1, t=1500.0))                     # 500 s old -> skipped
+    up = Job("u", FAST, 5.0, 1500.0, payload={"no_expire": True})
+    s.push(up)                                   # uploads are never shed
+    s.push(job(2, t=1950.0))                     # 50 s old -> kept
+    d = s.next()
+    assert [(j.msg_id, r) for j, r in d.skipped] == [("1", "fast_lag")]
+    assert d.pass_ == FAST and d.jobs[0].msg_id == "u"
+    assert s.next().jobs[0].msg_id == "2"
+
+
+def test_fast_lag_disabled_by_default():
+    s = Scheduler(wall=Clock(10_000.0))
+    s.push(job(1, t=0.0))
+    d = s.next()
+    assert d.skipped == [] and d.jobs[0].msg_id == "1"

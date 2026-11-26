@@ -130,6 +130,24 @@ class ArchiveIndex:
                     continue
         return 0.0
 
+    def recent_uris(self, tail_bytes: int = 256 * 1024) -> set[str]:
+        """URIs in the tail of the newest index files (covers any live playlist window), so a
+        restarted relay does not index the segments ``append_list`` carries over twice."""
+        out: set[str] = set()
+        files = sorted(self.idx_dir.glob("*.idx")) if self.idx_dir.is_dir() else []
+        for f in files[-2:]:
+            try:
+                with f.open("rb") as fh:
+                    fh.seek(max(0, f.stat().st_size - tail_bytes))
+                    lines = fh.read().decode("utf-8", "replace").splitlines()
+            except OSError:
+                continue
+            for line in lines:
+                p = line.split("\t")
+                if len(p) >= 3:
+                    out.add(p[2])
+        return out
+
     def append(self, entries: list[Entry]) -> int:
         if not entries:
             return 0

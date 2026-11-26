@@ -15,6 +15,7 @@
 </head>
 <body>
 <div class="wrap">
+  <div class="page-title"><h1>Reports</h1><p>A printable summary of what was said: for any time range, or for everything stored.</p></div>
   <div class="card">
     <h2>Generate a transcription report</h2>
     <div class="row">
@@ -44,7 +45,9 @@ nav("reports");
 const $ = (id) => document.getElementById(id);
 $("tz").textContent = localTz();
 (async () => {
-  for (const c of await channelList()) $("ch").add(new Option(`${c.name} (${c.id})`, c.id));
+  const { chans, cur: main } = await mainChannel();
+  for (const c of chans) $("ch").add(new Option(c.name, c.id));
+  if (main) $("ch").value = main.id;   // the one live channel by default
   try {
     const ups = (await api("/uploads?limit=200")).filter(u => u.status === "done");
     if (ups.length) { const g = document.createElement("optgroup"); g.label = "Uploaded files"; for (const u of ups) g.appendChild(new Option(u.filename, u.id)); $("ch").appendChild(g); }

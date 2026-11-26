@@ -42,6 +42,7 @@ services:
       # The dashboard embeds the live-stt player (http://localhost:8000) in an HTML text panel.
       # Local dev only: this allows raw HTML in text panels.
       GF_PANELS_DISABLE_SANITIZE_HTML: "true"
+      GF_USERS_DEFAULT_THEME: system           # follow the computer; ☀/☾ links on the dashboard switch both
     volumes:
       - ./infra/grafana/provisioning:/etc/grafana/provisioning:ro
       - ./infra/grafana/dashboards:/var/lib/grafana/dashboards:ro

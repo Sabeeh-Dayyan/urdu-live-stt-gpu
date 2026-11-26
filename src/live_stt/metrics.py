@@ -33,6 +33,10 @@ RTF = Histogram("stt_asr_rtf", "Real-time factor per job", ["pass"],
 GUARD_DROPS = Counter("stt_asr_guard_drops_total", "Segments dropped/flagged by guards",
                       ["pass", "reason"])
 REFINE_SKIPPED = Counter("stt_asr_refine_skipped_total", "Segments whose refinement was skipped")
+FAST_SKIPPED = Counter("stt_asr_fast_skipped_total",
+                       "FAST segments skipped by load shedding (asr.fast_max_lag_s)")
+FAST_SKIPPED_SECONDS = Counter("stt_asr_fast_skipped_seconds_total",
+                               "Audio seconds not transcribed because of load shedding")
 FAST_LAG_ALERT = Gauge("stt_asr_fast_lag_alert", "1 if FAST lag exceeds threshold")
 
 # ---------------------------------------------------------------- end-to-end latency

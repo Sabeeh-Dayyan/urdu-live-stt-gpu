@@ -43,6 +43,8 @@ MAX_EXPORT_ROWS = 50_000
 SAFE_ID = re.compile(r"^[A-Za-z0-9_.-]{1,64}$")
 HLS_FILE = re.compile(r"^(index\.m3u8|seg_\d{8}\.ts)$")
 UPLOAD_ID = re.compile(r"^up-[0-9a-f]{10}$")
+# UI files: browsers revalidate every load (ETag → 304), so an update is never hidden by a cache.
+NO_CACHE = {"Cache-Control": "no-cache"}
 URL_SCHEMES = ("udp", "rtp", "srt", "rtsp", "rtmp", "rtmps", "http", "https")
 UI_PAGES = {"live": "index.html", "archive": "archive.html", "reports": "reports.html",
             "uploads": "uploads.html", "channels": "channels.html", "system": "system.html"}
@@ -665,7 +667,7 @@ def create_app(s: Settings) -> FastAPI:
     @app.get("/")
     async def index():
         """Live captions page."""
-        return FileResponse(resolve_path("ui/index.html"))
+        return FileResponse(resolve_path("ui/index.html"), headers=NO_CACHE)
 
     @app.get("/ui/config")
     async def ui_config():
@@ -685,11 +687,12 @@ def create_app(s: Settings) -> FastAPI:
     async def ui_page(name: str):
         """UI pages: archive, reports, uploads, channels, system."""
         if name in UI_ASSETS:
-            return FileResponse(resolve_path("ui") / name, media_type=UI_ASSETS[name])
+            return FileResponse(resolve_path("ui") / name, media_type=UI_ASSETS[name],
+                                headers=NO_CACHE)
         page = UI_PAGES.get(name.removesuffix(".html"))
         if page is None:
             raise HTTPException(404, "not found")
-        return FileResponse(resolve_path("ui") / page)
+        return FileResponse(resolve_path("ui") / page, headers=NO_CACHE)
 
     @app.get("/ui/vendor/{name}")
     async def vendor(name: str):

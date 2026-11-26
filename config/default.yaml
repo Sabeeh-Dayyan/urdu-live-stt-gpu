@@ -57,6 +57,7 @@ asr:
   refine_queue_max: 64
   fast_lag_alert_s: 5
   refine_max_lag_s: 300
+  fast_max_lag_s: 0        # >0: skip live audio older than this (load shedding, recorded as a gap)
   fast_wer_margin: 0.03
 
 guards:

@@ -239,6 +239,8 @@ class AudioSource:
                     pts = pts % clock.wrap_ticks
                 utc_in, events = clock.map(pts, dur)
                 self._media_s += dur
+                if self.relay is not None and any(e.type == "discontinuity" for e in events):
+                    self.relay.resync("clock_discontinuity")  # re-anchor the video's date-time
                 for ev in events:  # intentional retroactive shift (ring buffer re-maps too)
                     if ev.type == "startup_correction" and out_end_utc is not None:
                         out_end_utc += ev.details["shift_s"]

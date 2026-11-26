@@ -18,6 +18,7 @@
 </head>
 <body>
 <div class="wrap">
+  <div class="page-title"><h1>Upload a file</h1><p>Transcribe a recorded video or audio file. You can keep using the site while it runs.</p></div>
   <div class="card">
     <h2>Upload a video or audio file to transcribe</h2>
     <div class="drop" id="drop">
@@ -38,7 +39,7 @@
     <div class="scroll-x"><table class="t" id="list"><thead><tr><th>File</th><th>Uploaded</th><th>Length</th><th>Status</th><th style="min-width:120px">Progress</th><th></th></tr></thead><tbody></tbody></table></div>
   </div>
 
-  <div class="grid2" id="viewer" hidden>
+  <div class="split" id="viewer" hidden>
     <div class="card">
       <h2 id="vtitle"></h2>
       <div class="vid"><video id="video" controls playsinline></video><div class="msg" id="vmsg"></div></div>
@@ -50,7 +51,7 @@
       </div>
       <p class="small muted">SRT/VTT cue times are relative to the start of the file; CSV/TXT/JSON carry the time from the start too (column "start" is base time + offset).</p>
     </div>
-    <div class="card">
+    <div class="card tcard">
       <h2>Transcript <span class="small muted" id="tinfo"></span></h2>
       <div class="lines" id="lines"></div>
     </div>

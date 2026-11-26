@@ -6,6 +6,9 @@ Per Whisper segment, drop when any of:
 * ``repetition``  : most frequent word n-gram occurs > max_ngram_repeats times
 * ``blocklist``   : normalised text is dominated (≥ 50 % of characters) by a known boilerplate
                     hallucination phrase ("thanks for watching", "subscribe", …)
+Trim (segment kept): a word or 2–3-word phrase repeated ≥ ``min_repeat_run`` times in a row is
+cut back to one copy (Whisper's looping tail, e.g. «اسمبلی وزیراعظم وزیراعظم وزیراعظم …»), flag
+``repeat_trimmed``.
 Words: drop those whose timestamps are outside [0, duration] (± 0.2 s slack, then clamped) or,
 for REFINE jobs that carry context, whose midpoint lies inside the context margins (they belong
 to the neighbouring segment).
@@ -45,6 +48,33 @@ def max_ngram_count(tokens: list[str], n: int) -> int:
         return 0
     c = Counter(tuple(tokens[i : i + n]) for i in range(len(tokens) - n + 1))
     return max(c.values())
+
+
+def collapse_runs(keys: list[str], min_run: int = 3, max_n: int = 3) -> list[int]:
+    """Indices to keep after cutting any n-gram (n ≤ max_n) that repeats ≥ min_run times in a row
+    back to a single copy. ``min_run`` ≤ 1 disables."""
+    keep = list(range(len(keys)))
+    if min_run <= 1:
+        return keep
+    changed = True
+    while changed:
+        changed = False
+        k = [keys[i] for i in keep]
+        for n in range(1, max_n + 1):
+            i = 0
+            while i + n * min_run <= len(k):
+                unit = k[i:i + n]
+                reps = 1
+                while k[i + reps * n:i + (reps + 1) * n] == unit:
+                    reps += 1
+                if reps >= min_run:
+                    del keep[i + n:i + reps * n]
+                    changed = True
+                    break
+                i += 1
+            if changed:
+                break
+    return keep
 
 
 @dataclass
@@ -113,12 +143,29 @@ class Guards:
                     if mid < lo or mid > hi:
                         continue  # belongs to the neighbouring segment's context
                 seg_words.append(WordResult(w.word, s, e, w.probability))
-            if has_ctx and seg.words:
+            run = getattr(self.cfg, "min_repeat_run", 3)
+            if seg_words:
+                keep = collapse_runs([normalize(w.word) for w in seg_words], run)
+                if len(keep) < len(seg_words):
+                    seg_words = [seg_words[i] for i in keep]
+                    flags.add("repeat_trimmed")
+                    trimmed = True
+                else:
+                    trimmed = False
+            else:
+                trimmed = False
+            if (has_ctx or trimmed) and seg.words:
                 if not seg_words:
                     continue
                 text = "".join(w.word for w in seg_words).strip()
             else:
-                text = seg.text.strip()
+                toks = seg.text.split()
+                keep = collapse_runs([normalize(t) for t in toks], run)
+                if len(keep) < len(toks):
+                    flags.add("repeat_trimmed")
+                    text = " ".join(toks[i] for i in keep)
+                else:
+                    text = seg.text.strip()
             kept_text.append(text)
             words += seg_words
             lp.append(seg.avg_logprob)

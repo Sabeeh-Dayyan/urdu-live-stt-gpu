@@ -53,7 +53,8 @@ class AsrService:
         a = settings.asr
         self.sched = Scheduler(
             fast_max=a.fast_queue_max, refine_max=a.refine_queue_max,
-            refine_max_lag_s=a.refine_max_lag_s, max_batch=a.max_batch,
+            refine_max_lag_s=a.refine_max_lag_s,
+            fast_max_lag_s=a.fast_max_lag_s, max_batch=a.max_batch,
             max_wait_s=a.max_wait_ms / 1000, batched=a.batched, pack_s=a.pack_s,
         )
         self.guards = Guards(settings.guards)
@@ -396,6 +397,18 @@ class AsrService:
 
     def _skip(self, job: Job, reason: str) -> None:
         msg = job.payload or {}
+        if job.pass_ == FAST and reason == "fast_lag" and not job.is_partial:
+            M.FAST_SKIPPED.inc()
+            M.FAST_SKIPPED_SECONDS.inc(max(0.0, float(job.duration_s or 0.0)))
+            try:
+                self.bus.publish(self.s.bus.stream_system, {
+                    "type": "fast_skipped", "channel_id": msg.get("channel_id"),
+                    "at_utc": msg.get("utc_start") or time.time(),
+                    "details": {"segment_id": msg.get("segment_id"), "reason": reason,
+                                "duration_s": round(float(job.duration_s or 0.0), 2),
+                                "utc_end": (msg.get("utc_start") or 0) + float(job.duration_s or 0)}})
+            except Exception as e:  # noqa: BLE001 - the gap record is best effort
+                log.warning("fast_skip_event_failed", error=str(e))
         if job.pass_ == REFINE:
             M.REFINE_SKIPPED.inc()
             self._publish({

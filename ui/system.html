@@ -22,6 +22,7 @@
 </head>
 <body>
 <div class="wrap">
+  <div class="page-title"><h1>System &amp; links</h1><p>Health, monitoring dashboards and every address the service offers, in one place.</p></div>
   <div class="card">
     <h2>Status <span id="st" class="pill">…</span></h2>
     <div class="grid2">
@@ -47,11 +48,11 @@ const card = (href, title, desc, ext) => `<a href="${esc(href)}"${ext ? ' target
   const cfg = await loadConfig();
   const L = cfg.links || {};
   $("pages").innerHTML = [
-    ["/", "Live", "live captions + live video per channel, exports"],
-    ["/ui/archive", "Archive & search", "any time range with video + transcript, topic search"],
+    ["/", "Live", "live video with the transcript beside it, downloads"],
+    ["/ui/archive", "Find a moment", "any date and time with video + transcript; search words and topics"],
     ["/ui/reports", "Reports", "custom-range or overall transcription reports"],
-    ["/ui/uploads", "Upload video", "transcribe a file"],
-    ["/ui/channels", "Channels", "add / edit stream URLs, enable / disable"],
+    ["/ui/uploads", "Upload a file", "transcribe a recorded video or audio file"],
+    ["/ui/channels", "Channel setup", "enter or change the stream URL"],
   ].map(([h, t, d]) => card(h, t, d)).join("");
   const tools = [
     [resolveLink(L.grafana || "{scheme}://{host}:3000/d/live-stt"), "Grafana dashboard", "pipeline metrics, latency, confidence, accuracy, transcript table", true],

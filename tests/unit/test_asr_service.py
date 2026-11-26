@@ -266,3 +266,19 @@ def test_emit_failure_does_not_kill_service():
     drain(svc)  # must not raise
     finals = events(bus, s, "final")
     assert len(finals) >= 1  # second segment processed despite the first failure
+
+
+def test_fast_load_shedding_records_gap_events_and_acks():
+    s = make(asr__fast_max_lag_s=5.0, asr__refine_enabled=False)
+    bus, asr = InMemoryBus(), FakeASR()
+    # worker clock 60 s in the past → every FAST job is already older than fast_max_lag_s
+    pipe = ChannelPipeline(s, s.channels[0], bus, EnergyVAD(), wall=lambda: time.time() - 60)
+    audio, _ = programme([[1, 2], [3, 4]])
+    feed(pipe, audio)
+    svc = AsrService(s, bus, asr, consumer="t")
+    drain(svc)
+    assert events(bus, s, "final") == []
+    gaps = [e for e in bus.messages(s.bus.stream_system) if e["type"] == "fast_skipped"]
+    assert len(gaps) == 2 and all(g["details"]["reason"] == "fast_lag" for g in gaps)
+    assert all(g["details"]["duration_s"] > 0 for g in gaps)
+    assert bus.depth(s.bus.stream_fast, "asr") == 0

@@ -120,6 +120,8 @@ idempotent. If an upload stays `processing` with no progress for `uploads.stall_
 | Symptom | Meaning | Action |
 |---|---|---|
 | `stt_asr_fast_lag_alert == 1` | FAST queue older than `asr.fast_lag_alert_s` — oversubscribed | Reduce channels per box, use a faster FAST config (see BENCHMARKS.md), or add a GPU / ASR service. In local_agreement mode workers automatically double `step_s` |
+| Live text minutes or hours behind the video | The machine cannot keep up (other programs using the CPU, too many channels) | Set `asr.fast_max_lag_s` (CPU profiles: 120): audio waiting longer is skipped and logged as `fast_skipped` (`stream_events`; Grafana "Audio skipped · range"; metric `stt_asr_fast_skipped_seconds_total`), so the text stays near live. 0 = never skip (complete transcript, unbounded delay). Then free CPU or add capacity |
+| `repeat_trimmed` flag on a segment | Whisper looped on a word/phrase (≥ 3 times in a row); the extra copies were removed (`guards.min_repeat_run`) | None |
 | `refine_skipped` events | REFINE older than `asr.refine_max_lag_s` is skipped (flagged in DB, never silent) | Expected under load; FAST is unaffected. Add capacity if continuous |
 | `error` events with `asr_error` | a segment failed inference 3 times (poison message isolated and acked) | Look at the log line `job_failed_permanently` |
 | ASR process restarting | `/health` → `supervisor.children.asr.restarts` | Pending requests are re-delivered to the restarted service (same consumer name); requests left on a dead host are claimed after 2 min |

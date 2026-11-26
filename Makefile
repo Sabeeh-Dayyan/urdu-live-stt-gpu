@@ -6,7 +6,7 @@ export UV_PROJECT_ENVIRONMENT := .venv
 # Run from source (macOS can flag .venv files "hidden"; Python then skips editable-install .pth files).
 export PYTHONPATH := $(CURDIR)/src:$(CURDIR)
 
-.PHONY: env test test-unit models infra infra-down reference testbed testbed-stop run migrate \
+.PHONY: start stream env test test-unit models infra infra-down reference testbed testbed-stop run migrate \
         tail bench bench-quick bench-live soak
 
 ## Create/refresh the project environment (Python 3.11 venv + uv lockfile).
@@ -59,6 +59,14 @@ testbed-stop:
 
 run:
 	$(PY) -m live_stt.cli supervise -c $(CONFIG)
+
+start:           ## everything in one go: Docker services (DB, Redis, Grafana) + the system
+	docker compose up -d
+	scripts/live.sh start $${LIVE_CONFIG:-config/dev-mac-cpu-broadcast.yaml}
+
+stream:          ## transcribe a stream link: make stream URL=udp://@239.1.1.1:5000
+	@test -n "$(URL)" || { echo 'usage: make stream URL=udp://@239.1.1.1:5000'; exit 2; }
+	scripts/set_stream.sh "$(URL)"
 
 up:              ## run detached (default: broadcast config) — UI :8000, Grafana :3000
 	scripts/live.sh start $${LIVE_CONFIG:-config/dev-mac-cpu-broadcast.yaml}

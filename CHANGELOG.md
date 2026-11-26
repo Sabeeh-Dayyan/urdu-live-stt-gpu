@@ -1,5 +1,45 @@
 # Changelog
 
+## 0.2.4 — 2026-11-26
+- **One-step stream entry**: the live page shows the stream link with **✎ Change** and opens a
+  large "Enter the stream link" box by itself when nothing arrives; `make stream URL=…` /
+  `scripts/set_stream.sh` from a terminal; `make start` starts Docker services and the system.
+- CPU profiles: 8 s segments, 16 s packing (measured delay p50 35.2 → 12.9 s, WER 26.4 → 20.7 %).
+- README: "Transcribe a UDP stream in 3 steps", which link format to enter, architecture and
+  workflow diagrams (`docs/images/`).
+
+## 0.2.3 — 2026-11-25
+- Grafana: live video and transcript first, live stat cards directly below; the embedded page
+  follows the computer's light/dark setting (Grafana too, `GF_USERS_DEFAULT_THEME=system`) and has
+  its own ☾/☀ button; the header's Light/Dark links switch both.
+- UI files are served with `Cache-Control: no-cache` (ETag revalidation), so browsers never show a
+  stale page after an update.
+
+## 0.2.2 — 2026-11-25
+- **Transcript follows the video**: the sentence (and word) being played is highlighted and kept
+  centred; scrolling pauses following for 15 s (⦿ Follow video resumes). **Sync video with text**
+  (on by default) plays live video behind the live edge by the measured text delay (90th
+  percentile + 8 s, 12–120 s), so the highlighted line is what you hear.
+- **Channel setup asks only for the stream link** (`239.1.1.1:5000` is accepted; multicast gets `@`);
+  ID, name, Urdu audio track and language are automatic, the rest is under "Advanced options".
+- **Grafana redesigned**: header with app links and a Light/Dark switch clear of Grafana's hover
+  menu (the embedded page follows the theme); "Live now" cards with sparklines (stream, text delay,
+  behind live, confidence, speech share, segments/min); live trend charts; accuracy and stored-range
+  sections; pipeline details collapsed.
+
+## 0.2.1 — 2026-11-25
+- **New look**: light theme by default with a dark switch; one channel per page; video and transcript
+  **side by side** (no scrolling), metric cards in a row below, larger adjustable Urdu text, plain
+  labels and a how-to strip. **Go to** any date and time from the live page; search opens Find a moment.
+- **Grafana**: single-channel, light theme by default, live page embedded full width, two rows of
+  stat cards (new: text delay, audio skipped under load).
+- **Load shedding** (`asr.fast_max_lag_s`, CPU profiles 120 s): an overloaded machine skips stale
+  live audio (recorded as a gap) instead of drifting hours behind.
+- **Fix: video stayed in sync with the transcript only until the first feed outage.** The HLS
+  date-time is now re-anchored to the clock after every outage or timestamp jump (it had drifted
+  3 h behind in a day-long test), and every archived segment is indexed.
+- **Repeat trimming**: Whisper's looping tails («وزیراعظم وزیراعظم وزیراعظم …») are cut to one copy.
+
 ## 0.2.0 — 2026-11-24
 - **Video archive and time-range replay**: segments are kept `relay.archive_hours` (servers: 24 h)
   with a per-day index; watch any range with its transcript, download it as MP4/TS, see coverage.

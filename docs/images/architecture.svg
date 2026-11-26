@@ -1,0 +1,108 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 660" width="1200" height="660" font-family="Inter, -apple-system, 'Segoe UI', Roboto, Arial, sans-serif">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#f8fafc"/><stop offset="1" stop-color="#eef2ff"/></linearGradient>
+    <linearGradient id="hdr" x1="0" x2="1"><stop offset="0" stop-color="#4f46e5"/><stop offset="1" stop-color="#0ea5e9"/></linearGradient>
+    <marker id="a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#475569"/></marker>
+    <filter id="sh" x="-5%" y="-5%" width="110%" height="120%"><feDropShadow dx="0" dy="2" stdDeviation="3" flood-color="#0f172a" flood-opacity=".12"/></filter>
+    <style>
+      .box{fill:#fff;stroke:#c7d2fe;stroke-width:1.5;filter:url(#sh)}
+      .t{font-size:17px;font-weight:700;fill:#1e1b4b}
+      .s{font-size:13px;fill:#334155}
+      .k{font-size:12px;fill:#4f46e5;font-weight:600;letter-spacing:.04em}
+      .l{stroke:#475569;stroke-width:2;fill:none;marker-end:url(#a)}
+      .d{stroke:#94a3b8;stroke-width:1.6;fill:none;stroke-dasharray:6 5;marker-end:url(#a)}
+      .lab{font-size:12px;fill:#475569;font-weight:600}
+    </style>
+  </defs>
+  <rect width="1200" height="660" rx="18" fill="url(#bg)"/>
+  <rect x="0" y="0" width="1200" height="64" rx="18" fill="url(#hdr)"/><rect x="0" y="40" width="1200" height="24" fill="url(#hdr)"/>
+  <text x="32" y="41" font-size="22" font-weight="700" fill="#fff">Urdu Live TV Transcription · architecture</text>
+  <text x="1168" y="41" font-size="14" fill="#e0e7ff" text-anchor="end">one channel · CPU or GPU · everything open source</text>
+
+  <!-- source -->
+  <rect x="28" y="110" width="170" height="130" rx="14" fill="#fff7ed" stroke="#fdba74" stroke-width="1.5" filter="url(#sh)"/>
+  <text x="113" y="140" text-anchor="middle" class="k">INPUT</text>
+  <text x="113" y="166" text-anchor="middle" class="t">TV channel</text>
+  <text x="113" y="190" text-anchor="middle" class="s">MPEG-TS over UDP</text>
+  <text x="113" y="208" text-anchor="middle" class="s">(multicast / unicast)</text>
+  <text x="113" y="226" text-anchor="middle" class="s">also SRT · RTSP · HLS</text>
+
+  <!-- worker -->
+  <rect x="236" y="90" width="300" height="250" rx="14" class="box"/>
+  <text x="256" y="118" class="k">CHANNEL WORKER</text>
+  <text x="256" y="144" class="t">Receive, clock, detect speech</text>
+  <text x="256" y="172" class="s">① demux + decode (PyAV / FFmpeg)</text>
+  <text x="256" y="194" class="s">② 16 kHz mono audio, 120 s ring buffer</text>
+  <text x="256" y="216" class="s">③ broadcast clock (PTS) → exact UTC</text>
+  <text x="256" y="238" class="s">④ Silero VAD, 32 ms frames</text>
+  <text x="256" y="260" class="s">⑤ cut at pauses, max 8 s per segment</text>
+  <line x1="256" y1="276" x2="516" y2="276" stroke="#e2e8f0"/>
+  <text x="256" y="300" class="s">⑥ copy video+audio to HLS (2 s files)</text>
+  <text x="256" y="320" class="s">    live window + archive for replay</text>
+  <path d="M198,175 L234,175" class="l"/>
+
+  <!-- redis -->
+  <rect x="574" y="110" width="170" height="160" rx="14" fill="#fef2f2" stroke="#fca5a5" stroke-width="1.5" filter="url(#sh)"/>
+  <text x="659" y="140" text-anchor="middle" class="k">MESSAGE BUS</text>
+  <text x="659" y="166" text-anchor="middle" class="t">Redis Streams</text>
+  <text x="659" y="192" text-anchor="middle" class="s">asr.requests.fast</text>
+  <text x="659" y="210" text-anchor="middle" class="s">asr.requests.refine</text>
+  <text x="659" y="228" text-anchor="middle" class="s">transcripts.events</text>
+  <text x="659" y="250" text-anchor="middle" class="s">+ live push (pub/sub)</text>
+  <path d="M536,175 L572,175" class="l"/><text x="540" y="166" class="lab">audio</text>
+
+  <!-- asr -->
+  <rect x="782" y="90" width="390" height="250" rx="14" class="box"/>
+  <text x="802" y="118" class="k">ASR SERVICE</text>
+  <text x="802" y="144" class="t">Speech → Urdu text (faster-whisper)</text>
+  <text x="802" y="172" class="s">• FAST pass (live text): Whisper large-v3-turbo, greedy</text>
+  <text x="802" y="194" class="s">• REFINE pass replaces it: beam 5, ±0.5 s context</text>
+  <text x="802" y="216" class="s">     CPU: turbo · GPU: large-v3 (most accurate)</text>
+  <text x="802" y="238" class="s">• FAST always first; CPU packs segments ≤ 16 s</text>
+  <text x="802" y="260" class="s">• overload: audio waiting &gt; 120 s skipped (logged)</text>
+  <text x="802" y="282" class="s">• hallucination guards, repeat trimming</text>
+  <text x="802" y="304" class="s">• word timestamps + confidence per word</text>
+  <path d="M744,150 L780,150" class="l"/>
+  <path d="M780,250 L746,250" class="l"/><text x="748" y="268" class="lab">text</text>
+
+  <!-- bottom row -->
+  <rect x="236" y="420" width="220" height="120" rx="14" class="box"/>
+  <text x="256" y="448" class="k">PERSISTER</text>
+  <text x="256" y="474" class="t">→ PostgreSQL 16</text>
+  <text x="256" y="498" class="s">every word with its UTC time,</text>
+  <text x="256" y="516" class="s">confidence, flags, search index</text>
+
+  <rect x="490" y="420" width="250" height="120" rx="14" class="box"/>
+  <text x="510" y="448" class="k">API · FASTAPI</text>
+  <text x="510" y="474" class="t">Web app on :8000</text>
+  <text x="510" y="498" class="s">REST · WebSocket · HLS video ·</text>
+  <text x="510" y="516" class="s">search · reports · uploads</text>
+
+  <rect x="776" y="420" width="190" height="120" rx="14" fill="#ecfdf5" stroke="#86efac" stroke-width="1.5" filter="url(#sh)"/>
+  <text x="796" y="448" class="k">BROWSER</text>
+  <text x="796" y="474" class="t">Video ⇄ text</text>
+  <text x="796" y="498" class="s">side by side, highlight</text>
+  <text x="796" y="516" class="s">follows the video</text>
+
+  <rect x="996" y="420" width="176" height="120" rx="14" fill="#f5f3ff" stroke="#c4b5fd" stroke-width="1.5" filter="url(#sh)"/>
+  <text x="1016" y="448" class="k">MONITORING</text>
+  <text x="1016" y="474" class="t">Prometheus</text>
+  <text x="1016" y="496" class="t">→ Grafana :3000</text>
+  <text x="1016" y="520" class="s">delay, confidence, stream</text>
+
+  <path d="M640,270 C620,340 420,350 360,418" class="l"/>
+  <path d="M680,270 C690,340 640,370 620,418" class="l"/>
+  <path d="M456,480 L488,480" class="l"/>
+  <path d="M740,480 L774,480" class="l"/>
+  <path d="M386,340 C386,380 560,390 590,418" class="d"/><text x="430" y="392" class="lab">HLS files</text>
+  <path d="M1080,340 L1080,418" class="d"/><text x="1088" y="384" class="lab">metrics</text>
+
+  <rect x="28" y="420" width="170" height="120" rx="14" fill="#f8fafc" stroke="#cbd5e1" stroke-width="1.5" filter="url(#sh)"/>
+  <text x="48" y="448" class="k">SUPERVISOR</text>
+  <text x="48" y="474" class="t">keeps it running</text>
+  <text x="48" y="498" class="s">starts every process,</text>
+  <text x="48" y="516" class="s">restarts on failure</text>
+
+  <text x="32" y="600" font-size="14" fill="#334155"><tspan font-weight="700">Operator:</tspan> open http://localhost:8000 → paste the UDP link (or <tspan font-family="Menlo, monospace">make stream URL=udp://@239.1.1.1:5000</tspan>) → video + Urdu text side by side.</text>
+  <text x="32" y="626" font-size="13" fill="#64748b">Work waits durably in Redis, so any process can restart without losing audio. Transcripts keep absolute UTC times from the broadcast clock.</text>
+</svg>

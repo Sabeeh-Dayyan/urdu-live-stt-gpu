@@ -63,6 +63,9 @@ MATRICES = {
     "full": [Cfg(m, b, s, t) for m in (T, L) for b in (1, 2, 5) for s in (6, 8, 10)
              for t in (8, 16)],
     "quick": [Cfg(T, 1), Cfg(T, 1, pack=28)],
+    # Smaller chunks / smaller packs for lower delay (CPU), vs the current live FAST config.
+    "latency": [Cfg(T, 1, 10, pack=28), Cfg(T, 1, 8, pack=16), Cfg(T, 1, 6, pack=12),
+                Cfg(T, 1, 4, pack=12), Cfg(T, 1, 6, pack=18)],
     "turbo": [Cfg(T, 1), Cfg(T, 2), Cfg(T, 5), Cfg(T, 1, 6), Cfg(T, 1, 10), Cfg(T, 1, threads=16)],
     "large": [Cfg(L, 1), Cfg(L, 5)],
 }

@@ -431,3 +431,40 @@ def test_upload_deleted_while_processing_is_cancelled(client, settings):
     ub = UploadBus(runner.bus, settings, "up-00000000aa")
     with pytest.raises(Cancelled):  # no such record (deleted) → stop processing
         runner._progress("up-00000000aa", 1.0, ub)
+
+
+def test_relay_resyncs_on_timestamp_jump_and_indexes_every_session(ts_file, tmp_path):
+    """A forward PTS jump (feed outage / encoder restart) starts a new HLS session, so the video's
+    PROGRAM-DATE-TIME is re-anchored to the wall clock instead of falling behind; every segment of
+    both sessions is indexed (by URI) and no file name is reused."""
+    b = tmp_path / "b.ts"
+    ff("-i", str(ts_file), "-c", "copy", "-output_ts_offset", "3600", "-f", "mpegts", str(b))
+    jump = tmp_path / "jump.ts"
+    jump.write_bytes(ts_file.read_bytes() + b.read_bytes())
+    d = tmp_path / "ch"
+    r = HlsRelay(d, window_s=900, segment_s=2, archive_hours=1)
+    _run(jump, r)
+    assert r.errors == 0 and r.resyncs >= 1
+    files = {p.relative_to(d).as_posix() for p in (d / "a").rglob("seg_*.ts")}
+    entries = A.ArchiveIndex(d).read(time.time() - 7200, time.time() + 7200, existing_only=False)
+    assert {e.uri for e in entries} == files            # every file indexed exactly once
+    assert len({e.uri.split("_")[2] for e in entries}) >= 2   # two sessions, distinct tokens
+    assert any(e.disc for e in entries)                  # the new session is a discontinuity
+
+
+def test_relay_resyncs_after_arrival_gap(ts_file, tmp_path, monkeypatch):
+    import live_stt.ingest.relay as R
+
+    d = tmp_path / "ch"
+    r = HlsRelay(d, window_s=900, segment_s=2, archive_hours=1)
+    clock = {"t": 1000.0}
+    monkeypatch.setattr(R.time, "monotonic", lambda: clock["t"])
+    src = AudioSource(str(ts_file), AudioTrack(), IngestConfig(), ClockConfig(), max_connects=1,
+                      relay=r)
+    n = 0
+    for c in src:
+        n += 1
+        clock["t"] += 0.05
+        if n == 40:
+            clock["t"] += R.GAP_RESYNC_S + 1   # the feed pauses
+    assert r.resyncs == 1

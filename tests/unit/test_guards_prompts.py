@@ -87,3 +87,20 @@ def test_shipped_blocklist_catches_measured_nonspeech_labels():
         assert g.segment_drop_reason(t, -0.3, 0.0, 1.2) == "blocklist", t
     real = "وزیر ثقافت نے کہا کہ پاکستانی موسیقی دنیا بھر میں مقبول ہے"
     assert g.segment_drop_reason(real, -0.3, 0.0, 1.2) is None
+
+
+def test_repeat_tail_trimmed_not_dropped():
+    txt = "ہر نئے صوبے کی اپنی اسمبلی وزیراعظم وزیراعظم وزیراعظم وزیراعظم وزیراعظم"
+    out = G.apply(res(seg(txt)), 6.0)
+    assert out.drops == [] and "repeat_trimmed" in out.flags
+    assert out.text == "ہر نئے صوبے کی اپنی اسمبلی وزیراعظم"
+    ws = [WordResult(" " + w, i * 0.3, i * 0.3 + 0.25, 0.9) for i, w in enumerate(
+        ["ترکی", "کے", "وزیراعظم", "وزیراعظم", "وزیراعظم", "وزیراعظم"])]
+    out = G.apply(res(seg("".join(w.word for w in ws), words=ws)), 3.0)
+    assert [w.word.strip() for w in out.words] == ["ترکی", "کے", "وزیراعظم"]
+    assert out.text == "ترکی کے وزیراعظم"
+
+
+def test_two_repeats_are_normal_speech():
+    out = G.apply(res(seg("بہت بہت شکریہ")), 2.0)
+    assert out.text == "بہت بہت شکریہ" and "repeat_trimmed" not in out.flags

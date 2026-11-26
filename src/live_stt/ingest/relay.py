@@ -9,6 +9,13 @@ Safety: the relay must never disturb transcription. Every failure is caught and 
 re-opened after ``retry_s``. Timestamps are re-based to stay monotonic across PTS jumps (encoder
 resets / looping files), because the HLS muxer rejects non-monotonic DTS.
 
+Wall-clock alignment: ffmpeg's hlsenc writes PROGRAM-DATE-TIME as (wall clock when the muxer
+started) + (sum of segment durations). Any pause or timestamp jump in the input therefore makes the
+video's date-time fall behind the real time for the rest of the session (observed: 3 h behind after
+a day of feed outages). The relay re-starts the HLS session (``resync``) at every input timestamp
+jump, every clock discontinuity reported by the audio clock, and after ``GAP_RESYNC_S`` without
+packets, so each session's date-time is re-anchored to the wall clock.
+
 Verified against PyAV 18.1.0: ``OutputContainer.add_stream_from_template``, format ``hls`` with
 options ``hls_time``, ``hls_list_size``, ``hls_flags``, ``hls_segment_filename`` (ffmpeg hlsenc).
 """
@@ -30,6 +37,8 @@ SEGMENT_PATTERN = "seg_%08d.ts"
 JUMP_BACK_S = 1.0  # backward DTS jump larger than this ⇒ re-base
 JUMP_FWD_S = 30.0  # forward DTS jump larger than this ⇒ re-base
 REBASE_GAP_S = 0.04
+GAP_RESYNC_S = 10.0  # no packet for this long ⇒ new HLS session (re-anchor PROGRAM-DATE-TIME)
+RESYNC_MIN_INTERVAL_S = 2.0
 
 
 class TimestampRebaser:
@@ -61,8 +70,12 @@ class HlsRelay:
         self.dir = Path(outdir)
         self.archive_hours = archive_hours
         self._index = None
-        self._last_indexed = 0.0
+        self._seen: set[str] = set()  # archive URIs already indexed
         self._pl_mtime = 0.0
+        self._last_mux_m = 0.0  # monotonic time of the last muxed packet
+        self._last_resync_m = -1e9
+        self.resyncs = 0
+        self._sessions = 0
         self._next_index_check = 0.0
         self._next_retention = 0.0
         self.window_s = window_s
@@ -106,13 +119,14 @@ class HlsRelay:
                 # (+ a per-session token: the segment counter restarts on every reconnect).
                 from live_stt.ingest.archive import ArchiveIndex
 
-                tok = str(int(time.time()) % 1_000_000)
+                self._sessions += 1  # unique even for two sessions started in the same second
+                tok = str(int(time.time()) % 1_000_000 * 100 + self._sessions % 100)
                 flags.append("second_level_segment_index")
                 opts.update(strftime="1", strftime_mkdir="1", hls_segment_filename=str(
                     self.dir / "a" / "%Y%m%d" / f"seg_%Y%m%dT%H%M%S_{tok}_%%04d.ts"))
                 if self._index is None:
                     self._index = ArchiveIndex(self.dir)
-                    self._last_indexed = self._index.last_t()
+                    self._seen = self._index.recent_uris()
             else:
                 flags.insert(0, "delete_segments")
                 opts["hls_segment_filename"] = str(self.dir / SEGMENT_PATTERN)
@@ -122,8 +136,27 @@ class HlsRelay:
                           for s in self._templates}
             self._rebase = TimestampRebaser()
             self._started = False
+            self._last_mux_m = 0.0
         except Exception as e:  # noqa: BLE001
             self._fail("relay_open_failed", e)
+
+    def resync(self, reason: str) -> bool:
+        """Start a new HLS session now (keeps the playlist, marks a discontinuity) so
+        PROGRAM-DATE-TIME is re-anchored to the wall clock. Rate-limited; never raises."""
+        if self._out is None or not self._started:
+            return False
+        now = time.monotonic()
+        if now - self._last_resync_m < RESYNC_MIN_INTERVAL_S:
+            return False
+        self._last_resync_m = now
+        self.resyncs += 1
+        log.info("relay_resync", reason=reason, dir=str(self.dir))
+        try:
+            self.close()
+            self._try_open()
+        except Exception as e:  # noqa: BLE001
+            self._fail("relay_resync_failed", e)
+        return True
 
     def _sweep(self, playlist: Path) -> None:
         """Delete segment files the playlist no longer references. ffmpeg keeps one segment past
@@ -178,6 +211,11 @@ class HlsRelay:
                     return
             if packet.dts is None or packet.size == 0:
                 return
+            if self._started and self._last_mux_m and \
+                    time.monotonic() - self._last_mux_m > GAP_RESYNC_S:
+                self.resync("arrival_gap")  # this packet may start the new session
+                if self._out is None:
+                    return
             ost = self._omap.get(packet.stream.index)
             if ost is None:
                 return
@@ -186,9 +224,12 @@ class HlsRelay:
                     return
                 self._started = True
             tb = packet.time_base or packet.stream.time_base or Fraction(1, 90000)
+            had, before = self._rebase.last_s is not None, self._rebase.offset_s
             off = self._rebase.map(packet.stream.index, float(packet.dts * tb))
             if off is None:
                 return
+            if had and off != before and self.resync("timestamp_jump"):
+                return  # the new session starts at the next keyframe
             if off:
                 ticks = round(off / tb)
                 packet.dts += ticks
@@ -197,6 +238,7 @@ class HlsRelay:
             packet.stream = ost
             self._out.mux(packet)
             self.packets += 1
+            self._last_mux_m = time.monotonic()
         except Exception as e:  # noqa: BLE001
             self._fail("relay_mux_failed", e)
             return
@@ -233,9 +275,12 @@ class HlsRelay:
         if mt == self._pl_mtime:
             return 0
         self._pl_mtime = mt
-        new = [e for e in parse_playlist(playlist.read_text(), self.dir)
-               if e.t > self._last_indexed + 1e-3]
+        # By URI, not by time: a new session's date-time can start slightly before the previous
+        # session's last one (sender bursts), and those segments must still be indexed.
+        new = [e for e in parse_playlist(playlist.read_text(), self.dir) if e.uri not in self._seen]
         if new:
             self._index.append(new)
-            self._last_indexed = new[-1].t
+            self._seen.update(e.uri for e in new)
+            if len(self._seen) > 20_000:  # keep it bounded: only the recent tail matters
+                self._seen = self._index.recent_uris()
         return len(new)

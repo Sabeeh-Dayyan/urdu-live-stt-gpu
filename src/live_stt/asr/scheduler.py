@@ -6,6 +6,9 @@
   final supersedes queued partials of its segment (superseded jobs are returned as ``skipped``
   so they can be acked — nothing is silently lost).
 * REFINE jobs older than ``refine_max_lag_s`` are skipped (→ ``refine_skipped`` events).
+* Optional load shedding: with ``fast_max_lag_s`` > 0, FAST jobs older than that are skipped
+  (→ ``fast_skipped`` gap events) so live text stays close to real time on an overloaded host
+  instead of falling hours behind. 0 (default) = FAST is never dropped.
 * Micro-batching (``batched=True``): take up to ``max_batch`` jobs once that many are queued or
   the oldest has waited ``max_wait_s``; fill the batch with the jobs closest in duration to the
   oldest job (length grouping → less padding waste).
@@ -51,6 +54,7 @@ class Scheduler:
         fast_max: int = 256,
         refine_max: int = 64,
         refine_max_lag_s: float = 300.0,
+        fast_max_lag_s: float = 0.0,
         max_batch: int = 1,
         max_wait_s: float = 0.05,
         batched: bool = False,
@@ -64,6 +68,7 @@ class Scheduler:
         self.fast_max = fast_max
         self.refine_max = refine_max
         self.refine_max_lag_s = refine_max_lag_s
+        self.fast_max_lag_s = fast_max_lag_s
         self.max_batch = max(1, max_batch if batched else 1)
         self.max_wait_s = max_wait_s
         self.batched = batched
@@ -121,6 +126,15 @@ class Scheduler:
         with self._cv:
             skipped, self._skipped = self._skipped, []
             now = self.wall()
+            if self.fast_max_lag_s > 0 and self.fast and \
+                    now - self.fast[0].t_enqueued > self.fast_max_lag_s:
+                keep = deque()
+                for q in self.fast:
+                    if now - q.t_enqueued > self.fast_max_lag_s and not _no_expire(q):
+                        skipped.append((q, "fast_lag"))
+                    else:
+                        keep.append(q)
+                self.fast = keep
             # Expire stale refinements (uploaded-file jobs carry no_expire: never dropped).
             if self.refine and any(now - q.t_enqueued > self.refine_max_lag_s
                                    and not _no_expire(q) for q in self.refine):

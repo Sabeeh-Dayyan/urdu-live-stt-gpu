@@ -11,12 +11,13 @@ asr:
   # set and runs at RTF > 1 here, so REFINE on CPU = turbo beam 5 with ±0.5 s context (no extra RAM).
   refine: {model: large-v3-turbo, beam_size: 5, best_of: 5}
   batched: false
-  pack_s: 28              # pack queued segments into one encoder pass (CPU throughput)
+  pack_s: 16              # pack queued segments into one encoder pass (CPU throughput)
   refine_max_lag_s: 1800  # CPU: REFINE catches up during non-speech; older work is skipped (flagged)
+  fast_max_lag_s: 120      # overloaded host: live text stays ≤ ~2 min behind; skipped audio is logged as a gap
 
 streaming:
   mode: segment
-  max_segment_s: 10       # measured best on this CPU with packing (RTF 0.90, p50 11.7 s)
+  max_segment_s: 8       # measured best on this CPU with packing (RTF 0.90, p50 11.7 s)
   partials_enabled: false  # enable only if measured RTF leaves headroom
 
 # Rolling HLS copy of each channel (video+audio, no re-encode) for the UI player; 15 min window.

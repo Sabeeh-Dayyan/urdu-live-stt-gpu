@@ -1,377 +1,404 @@
 <!doctype html>
-<html lang="ur">
+<html lang="en">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Live STT</title>
+<title>Urdu Live Transcription</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Noto+Nastaliq+Urdu:wght@400;600&display=swap" rel="stylesheet">
 <script src="/ui/vendor/hls.min.js"></script><!-- hls.js 1.5.20 (vendored) -->
 <link rel="stylesheet" href="/ui/common.css">
 <script src="/ui/common.js"></script>
 <style>
-  :root {
-    --bg: #f6f7f9; --panel: #ffffff; --ink: #14171c; --muted: #6b7280; --line: #e3e6eb;
-    --accent: #1f6feb; --ok: #1a7f37; --warn: #9a6700; --bad: #cf222e; --badge: #e7f0ff; --hi: #fff6d6;
+  .hero { display: flex; flex-wrap: wrap; gap: 12px 16px; align-items: center; margin-bottom: 16px; }
+  .hero h1 { font-size: 22px; margin: 0; display: flex; align-items: center; gap: 10px; }
+  .hero .grow { flex: 1; }
+  .goto { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; background: var(--panel); border: 1px solid var(--line);
+          border-radius: 12px; padding: 6px 8px; box-shadow: var(--shadow); }
+  .goto span { font-size: 13px; color: var(--muted); font-weight: 600; padding: 0 4px; }
+  .goto input { padding: 5px 8px; }
+  .search { display: flex; gap: 6px; flex: 0 1 340px; min-width: 200px; }
+  .search input { flex: 1; }
+  .vtools { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-top: 10px; }
+  .vtools .grow { flex: 1; }
+  .tcard .chead { margin-bottom: 4px; }
+  .legend { font-size: 12.5px; color: var(--muted); margin: 0 0 6px; }
+  .legend .lowp { color: var(--ink); }
+  .hi-sample { background: var(--soft); box-shadow: inset 3px 0 0 var(--accent); padding: 0 5px; border-radius: 3px; color: var(--ink); }
+  .latest { position: absolute; inset: auto 24px 16px auto; display: none; box-shadow: var(--shadow); }
+  .tcard { position: relative; }
+  .seg-note { font-size: 12.5px; color: var(--muted); text-align: center; padding: 6px; }
+  .sz button { padding: 4px 9px; }
+  #chSel { display: none; }
+  .linkpill { font-family: ui-monospace, Menlo, monospace; max-width: 420px; overflow: hidden; text-overflow: ellipsis; }
+  .linkpill a { font-family: system-ui, sans-serif; font-weight: 600; margin-inline-start: 6px; }
+  .setlink { border: 2px solid var(--accent); }
+  .setlink h2 { font-size: 19px; }
+  @media (max-width: 700px) {
+    .hero .goto, .hero .search { flex: 1 1 100%; max-width: 100%; }
+    .goto input { flex: 1 1 120px; min-width: 0; }
+    .vtools label, .vtools select { flex: 1 1 auto; min-width: 0; }
+    .hero .grow { display: none; }
   }
-  @media (prefers-color-scheme: dark) {
-    :root { --bg: #0e1116; --panel: #161b22; --ink: #e6edf3; --muted: #8b949e; --line: #30363d;
-            --accent: #4493f8; --ok: #3fb950; --warn: #d29922; --bad: #f85149; --badge: #1b2a44; --hi: #3a3000; }
-  }
-  * { box-sizing: border-box; }
-  body { margin: 0; background: var(--bg); color: var(--ink);
-         font: 14px/1.4 system-ui, -apple-system, "Segoe UI", sans-serif; }
-  header { display: flex; flex-wrap: wrap; gap: 8px 12px; align-items: center; padding: 8px 16px;
-           border-bottom: 1px solid var(--line); background: var(--panel); }
-  header h1 { font-size: 16px; margin: 0 4px 0 0; }
-  .pill { font-size: 12px; padding: 2px 8px; border-radius: 999px; border: 1px solid var(--line); color: var(--muted); white-space: nowrap; }
-  .pill.ok { color: var(--ok); border-color: var(--ok); }
-  .pill.bad { color: var(--bad); border-color: var(--bad); }
-  header input, select, button { font: inherit; padding: 5px 9px; border: 1px solid var(--line); border-radius: 6px;
-                                  background: var(--bg); color: var(--ink); }
-  header input { flex: 1 1 180px; min-width: 0; }
-  button { cursor: pointer; }
-  button:hover { border-color: var(--accent); }
-  a { color: var(--accent); }
-  .note { font-size: 12px; color: var(--muted); padding: 6px 16px; }
-  main { display: grid; gap: 12px; padding: 12px 16px; grid-template-columns: repeat(auto-fill, minmax(min(100%, 520px), 1fr)); }
-  .ch { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; display: flex;
-        flex-direction: column; min-width: 0; }
-  .ch h2 { font-size: 14px; margin: 0; padding: 10px 12px; border-bottom: 1px solid var(--line);
-           display: flex; justify-content: space-between; gap: 8px; align-items: center; }
-  .vid { position: relative; background: #000; aspect-ratio: 16 / 9; }
-  .vid video { width: 100%; height: 100%; display: block; }
-  .vid .msg { position: absolute; inset: auto 0 0 0; padding: 4px 8px; font-size: 12px; color: #fff;
-              background: rgba(0,0,0,.6); display: none; }
-  .stats { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); border-bottom: 1px solid var(--line); }
-  .stats div { padding: 6px 10px; border-inline-end: 1px solid var(--line); min-width: 0; }
-  .stats div:last-child { border-inline-end: 0; }
-  .stats b { display: block; font-size: 16px; font-variant-numeric: tabular-nums; }
-  .stats span { font-size: 11px; color: var(--muted); }
-  .tools { display: flex; flex-wrap: wrap; gap: 6px; padding: 8px 12px; border-bottom: 1px solid var(--line); align-items: center; }
-  .tools .grow { flex: 1; }
-  .lines { overflow-y: auto; padding: 4px 12px 8px; height: 46vh; }
-  .seg { padding: 4px 0; border-bottom: 1px dashed var(--line); }
-  .seg .meta { font-size: 11px; color: var(--muted); display: flex; flex-wrap: wrap; gap: 8px; font-variant-numeric: tabular-nums; }
-  .seg .badge { background: var(--badge); color: var(--accent); border-radius: 4px; padding: 0 5px; }
-  .sent { display: grid; grid-template-columns: 76px 1fr 44px; gap: 8px; align-items: baseline; padding: 2px 4px;
-          border-radius: 4px; cursor: pointer; }
-  .sent:hover { background: var(--bg); }
-  .sent.hi { background: var(--hi); }
-  .sent .t { font-size: 12px; color: var(--accent); font-variant-numeric: tabular-nums; direction: ltr; display: flex; flex-direction: column; }
-  .sent .t small { font-size: 10px; color: var(--muted); }
-  .sent .txt { font-family: "Noto Nastaliq Urdu", serif; font-size: 18px; line-height: 2.1; unicode-bidi: plaintext; min-width: 0; }
-  .sent .c { font-size: 11px; text-align: end; font-variant-numeric: tabular-nums; }
-  .c.hiC { color: var(--ok); } .c.midC { color: var(--warn); } .c.loC { color: var(--bad); }
-  .seg.partial .txt { color: var(--muted); }
-  .lowp { text-decoration: underline dotted var(--warn); text-underline-offset: 6px; color: var(--warn); }
-  .hidden-n { font-size: 11px; color: var(--muted); padding: 4px 0; }
-  #results { padding: 0 16px; }
-  #results .seg { background: var(--panel); padding: 6px 10px; border: 1px solid var(--line); border-radius: 6px; margin-top: 6px; }
-  body.embed header, body.embed .note, body.embed nav.top { display: none; }
+  body.embed .wrap { padding: 8px; max-width: none; }
+  body.embed .help, body.embed .note, body.embed .search, body.embed .metrics { display: none; }   /* Grafana shows the stats */
+  body.embed .hero { margin-bottom: 8px; }
+  body.embed .hero h1 { font-size: 17px; }
 </style>
 </head>
 <body>
-<header>
-  <span id="conn" class="pill">connecting…</span>
-  <label>Min confidence
-    <select id="minconf" title="Hide sentences below this model confidence (mean word probability)">
-      <option value="0">all</option><option value="0.8">≥ 80%</option>
-      <option value="0.9" selected>≥ 90%</option><option value="0.95">≥ 95%</option>
-    </select>
-  </label>
-  <input id="q" dir="auto" placeholder="Quick search / تلاش (more in Archive &amp; search)" autocomplete="off">
-</header>
-<div class="note" id="accnote">Confidence = the model's own word probability, not verified accuracy.</div>
-<div id="results"></div>
-<main id="grid"></main>
+<div class="wrap">
+  <div class="hero">
+    <h1><span id="chName">Live</span> <span id="conn" class="pill">connecting…</span></h1>
+    <select id="chSel" title="Channel"></select>
+    <button id="embTheme" class="pill" hidden></button>
+    <span class="pill linkpill" id="linkPill" title="The stream this page is transcribing"><span id="linkTxt">…</span> <a href="#" id="linkEdit">✎ Change</a></span>
+    <span class="grow"></span>
+    <div class="goto" title="Watch any earlier moment with its transcript">
+      <span>Go to</span>
+      <input id="gDate" type="date" aria-label="date">
+      <input id="gTime" type="time" step="1" aria-label="time">
+      <button id="gGo" class="primary">▶ Watch</button>
+    </div>
+    <form class="search" id="sForm" title="Search all transcripts (opens Find a moment)">
+      <input id="q" dir="auto" placeholder="Search words, e.g. وزیراعظم" autocomplete="off">
+      <button>Search</button>
+    </form>
+  </div>
+
+  <div class="card setlink" id="setLink" hidden>
+    <h2 id="setTitle">📡 Enter the stream link to start</h2>
+    <p class="muted small" id="setHint">Paste the UDP link of the TV channel (for example <code>udp://@239.1.1.1:5000</code>, or just <code>239.1.1.1:5000</code>).
+      Video and Urdu text start about 20 seconds after the stream arrives.</p>
+    <form class="row" id="setForm">
+      <input id="setUrl" style="flex:1 1 360px;font-size:16px;padding:10px 12px" placeholder="udp://@239.1.1.1:5000" autocomplete="off">
+      <button class="primary" style="font-size:16px;padding:10px 18px">▶ Start transcribing</button>
+      <button type="button" id="setCancel">Cancel</button>
+    </form>
+  </div>
+
+  <div class="split">
+    <div class="card">
+      <div class="vid"><video id="video" muted playsinline controls></video><div class="badge" id="badge">● LIVE</div><div class="msg" id="vmsg"></div></div>
+      <div class="vtools">
+        <button id="liveBtn" class="primary" title="Back to the live picture and newest text">● Back to live</button>
+        <label class="small muted" title="Text appears some seconds after it is spoken. With this on, the live video plays that much behind, so the highlighted line is what you hear."><input type="checkbox" id="syncOn" checked> sync video with text</label>
+        <span class="muted small" id="vnote">Muted at start: use the speaker icon for sound.</span>
+        <span class="grow"></span>
+        <label class="small muted">Save transcript
+          <select id="exRange">
+            <option value="900">last 15 min</option><option value="3600" selected>last 1 hour</option>
+            <option value="21600">last 6 hours</option><option value="86400">last 24 hours</option>
+          </select>
+        </label>
+        <select id="exFmt" title="File format">
+          <option value="txt">Text (.txt)</option><option value="srt">Subtitles (.srt)</option><option value="vtt">Subtitles (.vtt)</option>
+          <option value="csv">Spreadsheet (.csv)</option><option value="json">JSON</option>
+        </select>
+        <button id="exBtn">⬇ Download</button>
+      </div>
+    </div>
+    <div class="card tcard">
+      <div class="chead">
+        <h2>Transcript</h2>
+        <span class="grow"></span>
+        <label class="small muted" title="Hide sentences the model is unsure about">
+          <input type="checkbox" id="onlyClear"> only clear sentences
+        </label>
+        <span class="sz"><button id="szDown" title="Smaller text">A−</button> <button id="szUp" title="Larger text">A+</button></span>
+      </div>
+      <p class="legend"><span class="hi-sample">Highlighted</span> = what the video is playing now (it follows the video). Click a line to replay it. <span class="lowp">Dotted underline</span> = the model is unsure about that word.</p>
+      <div class="lines" id="lines"><div class="empty">Waiting for speech…</div></div>
+      <div class="seg-note" id="hiddenN"></div>
+      <button class="latest primary" id="latestBtn">⦿ Follow video</button>
+    </div>
+  </div>
+
+  <div class="metrics">
+    <div class="metric" id="mLat"><div class="k">Delay</div><div class="v">–</div><div class="h">time from speech to text (median; fills in as new lines arrive)</div></div>
+    <div class="metric" id="mConf"><div class="k">Model confidence</div><div class="v">–</div><div class="h">how sure the model is (last 50 lines)</div></div>
+    <div class="metric" id="mClear"><div class="k">Clear sentences</div><div class="v">–</div><div class="h">sentences ≥ 90% confidence</div></div>
+    <div class="metric" id="mAcc"><div class="k">Tested accuracy</div><div class="v">–</div><div class="h">words correct on the reference test</div></div>
+    <div class="metric" id="mStream"><div class="k">Stream</div><div class="v">–</div><div class="h">checking…</div></div>
+  </div>
+
+  <div class="card help">
+    <div><span class="n">1</span><span><b>Watch live.</b> Text appears a few seconds after it is spoken, next to the picture.</span></div>
+    <div><span class="n">2</span><span><b>Replay anything.</b> Click a line, or use <b>Go to</b> above for any date and time.</span></div>
+    <div><span class="n">3</span><span><b>Find a topic.</b> Search a word (e.g. وزیراعظم) to list every mention with a ▶ Watch button.</span></div>
+    <div><span class="n">4</span><span><b>Share it.</b> Download the transcript, or make a report on <a href="/ui/reports">Reports</a>.</span></div>
+  </div>
+  <p class="muted small note" id="accnote">Confidence is the model's own estimate, not verified accuracy.</p>
+</div>
 <script>
 "use strict";
-const MAX_SEGS = 300, STATS_N = 50;
+const MAX_SEGS = 300, STATS_N = 50, LIVE_WIN_S = 900;
+const $ = (id) => document.getElementById(id);
 const params = new URLSearchParams(location.search);
-if (params.get("embed") === "1") document.body.classList.add("embed");
 nav("live");
-const grid = document.getElementById("grid");
-const minSel = document.getElementById("minconf");
-if (params.get("min_conf") != null) minSel.value = params.get("min_conf");
-const panels = new Map();   // channel_id -> panel
-const minConf = () => parseFloat(minSel.value) || 0;
+const video = $("video"), lines = $("lines");
+let cid = null, hls = null, pending = false;
+let vidT = null;           // epoch time the video is showing
+let holdUntil = 0;         // the user is reading elsewhere in the transcript until then (ms)
+let replay = false;        // playing an earlier moment, not live
+const held = () => Date.now() < holdUntil;
+try { $("syncOn").checked = localStorage.getItem("stt_sync") !== "0"; } catch (e) { /* default on */ }
+const segs = new Map(), stats = [];
+let nSeg = 0;
+if (params.get("min_conf") && parseFloat(params.get("min_conf")) >= 0.9 && params.get("embed") !== "1") $("onlyClear").checked = true;
+const minConf = () => $("onlyClear").checked ? 0.9 : 0;
 
-// ---- per-channel panel
-function panel(cid, name) {
-  if (panels.has(cid)) return panels.get(cid);
-  const el = document.createElement("section");
-  el.className = "ch";
-  el.innerHTML = `
-    <h2><span class="nm"></span><span><button class="live" title="Jump to live video">● LIVE</button></span></h2>
-    <div class="vid"><video muted playsinline controls></video><div class="msg"></div></div>
-    <div class="stats">
-      <div><b class="sLat">–</b><span>speech end → text (p50)</span></div>
-      <div><b class="sConf">–</b><span>avg confidence (last ${STATS_N})</span></div>
-      <div><b class="sHi">–</b><span>sentences ≥ 90% conf</span></div>
-      <div><b class="sSeg">0</b><span>segments · refined</span></div>
-    </div>
-    <div class="tools">
-      <span class="grow"></span>
-      <select class="range" title="Export range">
-        <option value="900">last 15 min</option><option value="3600" selected>last 1 h</option>
-        <option value="21600">last 6 h</option><option value="86400">last 24 h</option>
-      </select>
-      <button data-f="srt">SRT</button><button data-f="vtt">VTT</button>
-      <button data-f="csv">CSV</button><button data-f="txt">TXT</button><button data-f="json">JSON</button>
-    </div>
-    <div class="lines"></div><div class="hidden-n"></div>`;
-  el.querySelector(".nm").textContent = name ? `${name} (${cid})` : cid;
-  grid.appendChild(el);
-  const p = { cid, el, lines: el.querySelector(".lines"), video: el.querySelector("video"),
-              msg: el.querySelector(".msg"), hiddenEl: el.querySelector(".hidden-n"),
-              segs: new Map(), stats: [], nSeg: 0, nRef: 0, hls: null };
-  for (const b of el.querySelectorAll("button[data-f]")) b.onclick = () => exportFile(p, b.dataset.f);
-  el.querySelector(".live").onclick = () => goLive(p);
-  initVideo(p);
-  panels.set(cid, p);
-  return p;
+// ---- video (HLS from the channel worker; EXT-X-PROGRAM-DATE-TIME = wall clock)
+function vmsg(t) { $("vmsg").textContent = t || ""; $("vmsg").style.display = t ? "block" : "none"; }
+function badge(mode) {
+  const b = $("badge"); b.style.display = mode ? "block" : "none";
+  b.textContent = mode === "live" ? ($("syncOn").checked ? `● LIVE · −${syncDelay()} s, in step with text` : "● LIVE") : "⟲ REPLAY";
+  b.className = "badge" + (mode === "live" ? "" : " replay");
 }
-
-function exportFile(p, fmt) {
-  const secs = parseInt(p.el.querySelector(".range").value, 10);
-  const q = new URLSearchParams({ format: fmt, from: String(Date.now() / 1000 - secs),
-    min_conf: String(minConf()), tz: Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC" });
-  location.href = `/channels/${encodeURIComponent(p.cid)}/export?${q}`;
+// How far behind the live edge to play so the text for what is on screen has already arrived:
+// 90th percentile of measured live delay + 8 s (one sentence), 12–120 s; 30 s until measured.
+function syncDelay() {
+  const lats = stats.slice(-STATS_N).map(x => x.lat).filter(x => x != null).sort((a, b) => a - b);
+  const d = lats.length >= 5 ? lats[Math.floor(lats.length * 0.9)] + 8 : 30;
+  return Math.round(Math.max(12, Math.min(120, d)));
 }
-
-// ---- video (HLS written by the channel worker; EXT-X-PROGRAM-DATE-TIME = wall clock)
-function showMsg(p, text) { p.msg.textContent = text; p.msg.style.display = text ? "block" : "none"; }
-function initVideo(p) {
-  const src = `/hls/${encodeURIComponent(p.cid)}/index.m3u8`;
+function liveEdge() { return video.seekable.length ? video.seekable.end(video.seekable.length - 1) : null; }
+function initVideo() {
+  const src = `/hls/${encodeURIComponent(cid)}/index.m3u8`;
   if (window.Hls && Hls.isSupported()) {
-    const h = new Hls({ liveSyncDurationCount: 3, maxBufferLength: 30, backBufferLength: 120 });
+    const h = new Hls({ liveSyncDurationCount: 3, maxBufferLength: 30, backBufferLength: LIVE_WIN_S });
     h.on(Hls.Events.ERROR, (_, d) => {
-      if (d.fatal) {
-        showMsg(p, "video unavailable (relay off or stream down) — retrying");
-        setTimeout(() => { h.destroy(); p.hls = null; initVideo(p); }, 10000);
-      }
+      if (d.fatal) { vmsg("Video not available right now (stream down or relay off). Retrying…"); badge(null);
+                     setTimeout(() => { h.destroy(); hls = null; initVideo(); }, 10000); }
     });
-    h.on(Hls.Events.MANIFEST_PARSED, () => { showMsg(p, ""); p.video.play().catch(() => {}); });
-    h.loadSource(src); h.attachMedia(p.video); p.hls = h;
-  } else if (p.video.canPlayType("application/vnd.apple.mpegurl")) {  // Safari: native HLS
-    p.video.src = src; p.video.play().catch(() => {});
-  } else {
-    showMsg(p, "this browser cannot play HLS");
-  }
+    h.on(Hls.Events.MANIFEST_PARSED, () => { vmsg(""); badge("live"); video.play().catch(() => {}); });
+    h.once(Hls.Events.LEVEL_LOADED, () => setTimeout(() => { if (!replay) goLive(); }, 300));
+    h.loadSource(src); h.attachMedia(video); hls = h;
+  } else if (video.canPlayType("application/vnd.apple.mpegurl")) {   // Safari: native HLS
+    video.src = src; video.play().catch(() => {}); badge("live");
+  } else vmsg("This browser cannot play the video stream.");
 }
-function goLive(p) {
-  showMsg(p, ""); p.holdScroll = false; p.lines.scrollTop = p.lines.scrollHeight;
-  if (p.hls && p.hls.liveSyncPosition != null) p.video.currentTime = p.hls.liveSyncPosition;
-  else if (p.video.seekable.length) p.video.currentTime = p.video.seekable.end(p.video.seekable.length - 1) - 6;
-  p.video.play().catch(() => {});
+function goLive() {
+  vmsg(""); replay = false; holdUntil = 0; badge("live");
+  const end = liveEdge();
+  if (end != null) video.currentTime = Math.max(video.seekable.start(0), end - ($("syncOn").checked ? syncDelay() : 6));
+  else if (hls && hls.liveSyncPosition != null) video.currentTime = hls.liveSyncPosition;
+  video.play().catch(() => {});
 }
-function seekTo(p, t) {   // t = epoch seconds (UTC)
-  const ms = t * 1000;
-  let pos = null, first = null, last = null;
-  if (p.hls && p.hls.levels && p.hls.levels.length) {
-    const lv = p.hls.levels[Math.max(p.hls.currentLevel, 0)];
-    const frags = (lv && lv.details && lv.details.fragments) || [];
-    for (const f of frags) {
-      if (f.programDateTime == null) continue;
-      first = first ?? f.programDateTime; last = f.programDateTime + f.duration * 1000;
-      if (ms >= f.programDateTime && ms < f.programDateTime + f.duration * 1000) {
-        pos = f.start + (ms - f.programDateTime) / 1000; break;
-      }
-    }
-  } else if (p.video.getStartDate && !isNaN(p.video.getStartDate().getTime())) {
-    pos = (ms - p.video.getStartDate().getTime()) / 1000;
-  }
-  if (pos == null || pos < 0) {
-    const win = first ? ` (video buffered ${fmtLocal(first / 1000)}–${fmtLocal(last / 1000)})` : "";
-    showMsg(p, `no video for ${fmtLocal(t)}${win}`);
-    return false;
-  }
-  showMsg(p, `playing from ${fmtLocal(t)} — press LIVE to return`);
-  p.video.currentTime = pos; p.video.muted = false; p.video.play().catch(() => {});
+function seekTo(t) {   // epoch seconds; false if outside the live video window
+  if (!hlsSeekEpoch(hls, video, t)) return false;
+  replay = true; holdUntil = 0; badge("replay"); vmsg(`Replaying from ${fmtLocal(t)}. Press "Back to live" to return.`);
+  video.muted = false; video.play().catch(() => {});
   return true;
 }
+function openArchive(t) { location.href = `/ui/archive?ch=${encodeURIComponent(cid)}&t=${t}`; }
 
-// ---- transcript rendering: keep segments per channel, re-assemble sentences on every change
-function highlight(p, row) {
-  for (const r of p.lines.querySelectorAll(".sent.hi")) r.classList.remove("hi");
-  row.classList.add("hi");
-  p.hiT = parseFloat(row.dataset.t);
-}
-function sentRow(p, s) {
-  const row = document.createElement("div");
-  row.className = "sent";
-  row.dataset.t = s.s;
-  row.title = `${fmtUtc(s.s)} → ${fmtUtc(s.e)} · ${s.pass}` + (s.lat != null ? ` · latency ${s.lat.toFixed(1)} s` : "") +
-              ` · ${s.segs.length} segment(s) — click to play video from here`;
-  row.innerHTML = `<span class="t"><span class="tt"></span><small class="pm"></small></span><span class="txt" dir="auto"></span><span class="c"></span>`;
-  row.querySelector(".tt").textContent = fmtLocal(s.s);
-  row.querySelector(".pm").textContent = s.pass + (s.lat != null ? ` · ${Math.round(s.lat)} s` : "");
-  const txt = row.querySelector(".txt");
-  s.ws.forEach((w, i) => {   // per-word spans; low-confidence words are underlined
-    const t = wordOf(w)[0];
-    if (i) txt.appendChild(document.createTextNode(" "));
-    const sp = document.createElement("span");
-    sp.textContent = t;
-    if (typeof w.p === "number" && w.p < LOW_WORD) { sp.className = "lowp"; sp.title = `word confidence ${Math.round(w.p * 100)}%`; }
-    txt.appendChild(sp);
-  });
-  const c = row.querySelector(".c");
-  c.textContent = s.c == null ? "" : `${Math.round(s.c * 100)}%`;
-  c.className = "c " + confClass(s.c);
-  if (p.hiT != null && Math.abs(p.hiT - s.s) < 0.01) row.classList.add("hi");
-  row.onclick = () => { highlight(p, row); seekTo(p, s.s); };
-  return row;
-}
-function render(p) {
-  p.pending = false;
-  const atBottom = p.lines.scrollHeight - p.lines.scrollTop - p.lines.clientHeight < 60;
-  const rows = [...p.segs.values()].sort((a, b) => a.start_utc - b.start_utc).slice(-MAX_SEGS);
+// ---- transcript
+function render() {
+  pending = false;
+  const rows = [...segs.values()].sort((a, b) => a.start_utc - b.start_utc).slice(-MAX_SEGS);
   const sents = assemble(rows);
-  const frag = document.createDocumentFragment();
-  let hidden = 0;
-  for (const s of sents) {
-    if (minConf() > 0 && !(s.c != null && s.c >= minConf())) { hidden++; continue; }
-    frag.appendChild(sentRow(p, s));
+  const top = lines.scrollTop;
+  if (!sents.length) { lines.innerHTML = `<div class="empty">Waiting for speech…</div>`; }
+  else {
+    const hidden = sentenceRows(lines, sents, {
+      minConf: minConf(),
+      label: (s) => fmtLocal(s.s),
+      onClick: (s) => { if (seekTo(s.s)) { vidT = s.s; markPlaying(lines, s.s); } else openArchive(s.s); },
+    });
+    $("hiddenN").textContent = hidden ? `${hidden} unclear sentence(s) hidden` : "";
   }
-  const top = p.lines.scrollTop;
-  p.lines.replaceChildren(frag);
-  p.hiddenEl.textContent = hidden ? `${hidden} sentence(s) below ${Math.round(minConf() * 100)}% confidence hidden` : "";
   const sc = sents.slice(-STATS_N).map(s => s.c);
-  p.el.querySelector(".sHi").textContent = sc.length ? `${Math.round(100 * sc.filter(c => c != null && c >= 0.9).length / sc.length)}%` : "–";
-  if (atBottom && !p.holdScroll) p.lines.scrollTop = p.lines.scrollHeight; else p.lines.scrollTop = top;
+  setMetric("mClear", sc.length ? `${Math.round(100 * sc.filter(c => c != null && c >= 0.9).length / sc.length)}%` : "–",
+            sc.length ? lvl(sc.filter(c => c != null && c >= 0.9).length / sc.length, 0.8, 0.6) : "");
+  lines.scrollTop = top;
+  if (vidT != null) markPlaying(lines, vidT, { scroll: !held(), instant: true });
+  else if (!held()) lines.scrollTop = lines.scrollHeight;
 }
-function schedule(p) { if (!p.pending) { p.pending = true; requestAnimationFrame(() => render(p)); } }
-function updateStats(p) {
-  const st = p.stats.slice(-STATS_N);
+function schedule() { if (!pending) { pending = true; requestAnimationFrame(render); } }
+// The user scrolls the transcript → stop following for 15 s (or until "Follow video").
+for (const ev of ["wheel", "touchmove", "keydown"]) lines.addEventListener(ev, () => { holdUntil = Date.now() + 15000; $("latestBtn").style.display = "block"; }, { passive: true });
+$("latestBtn").onclick = () => { holdUntil = 0; $("latestBtn").style.display = "none"; if (vidT != null) markPlaying(lines, vidT); else lines.scrollTop = lines.scrollHeight; };
+setInterval(() => { if (!held()) $("latestBtn").style.display = "none"; }, 1000);
+video.addEventListener("timeupdate", () => {
+  const t = hlsTimeToEpoch(hls, video);
+  if (t == null) return;
+  vidT = t;
+  markPlaying(lines, t, { scroll: !held() });
+  const end = liveEdge();
+  if (end != null && !replay) badge("live");
+  if (end != null && replay && end - video.currentTime < 20) { replay = false; vmsg(""); badge("live"); }
+});
+$("syncOn").onchange = () => { try { localStorage.setItem("stt_sync", $("syncOn").checked ? "1" : "0"); } catch (e) { /* */ } if (!replay) goLive(); };
+// keep the synced delay up to date as the measured text delay changes
+setInterval(() => {
+  const end = liveEdge();
+  if (replay || end == null || !$("syncOn").checked || video.paused) return;
+  const behind = end - video.currentTime, want = syncDelay();
+  if (Math.abs(behind - want) > 12) video.currentTime = Math.max(video.seekable.start(0), end - want);
+}, 30000);
+
+// ---- metrics
+function lvl(v, good, mid) { return v >= good ? "good" : v >= mid ? "mid" : "bad"; }
+function setMetric(id, value, cls, hint) {
+  const m = $(id); m.querySelector(".v").textContent = value;
+  m.className = "metric" + (cls ? " " + cls : "");
+  if (hint != null) m.querySelector(".h").textContent = hint;
+}
+function updateStats() {
+  const st = stats.slice(-STATS_N);
   const lats = st.map(x => x.lat).filter(x => x != null).sort((a, b) => a - b);
   const confs = st.map(x => x.c).filter(x => x != null);
-  p.el.querySelector(".sLat").textContent = lats.length ? `${lats[Math.floor(lats.length / 2)].toFixed(1)} s` : "–";
-  p.el.querySelector(".sConf").textContent = confs.length ? `${Math.round(100 * confs.reduce((a, b) => a + b, 0) / confs.length)}%` : "–";
-  p.el.querySelector(".sSeg").textContent = `${p.nSeg} · ${p.nRef}`;
+  if (lats.length) { const m = lats[Math.floor(lats.length / 2)];
+    setMetric("mLat", m < 100 ? `${m.toFixed(1)} s` : fmtDur(m), m <= 15 ? "good" : m <= 60 ? "mid" : "bad"); }
+  if (confs.length) { const c = confs.reduce((a, b) => a + b, 0) / confs.length;
+    setMetric("mConf", `${Math.round(100 * c)}%`, lvl(c, 0.9, 0.8)); }
 }
+async function pollStream() {
+  try {
+    const j = await (await fetch("/health")).json();
+    const w = (j.components || {})["worker:" + cid];
+    const lags = Object.entries(j.components || {}).filter(([k]) => k.startsWith("asr")).map(([, v]) => v.fast_lag_s).filter(v => typeof v === "number");
+    const fresh = w && (Date.now() / 1000 - (w.t || 0)) < 30;
+    const lag = lags.length ? Math.max(...lags) : null;
+    if (!fresh) {
+      setMetric("mStream", "No signal", "bad", `nothing received on ${curUrl || "the stream link"}`);
+      noSignalSince = noSignalSince || Date.now();
+      if (!setOpen && Date.now() - noSignalSince > 20000)
+        showSetLink(true, "📡 No signal: check or change the stream link");
+    } else { noSignalSince = null; if (setOpen && $("setTitle").textContent.startsWith("📡 No signal")) showSetLink(false); }
+    if (fresh) setMetric("mStream", "Receiving", lag != null && lag > 60 ? "mid" : "good",
+                   lag != null && lag > 60 ? `computer busy: text ${fmtDur(lag)} behind` : "audio and video arriving normally");
+  } catch (e) { setMetric("mStream", "Unknown", "mid", "server not reachable"); }
+}
+async function loadAccuracy() {
+  try {
+    const rows = await (await fetch("/accuracy")).json();
+    const f = (k, m, t) => rows.find(x => x.kind === k && x.metric === m && Math.abs((x.threshold ?? 0) - t) < 1e-6);
+    const all = f("calibration_word", "precision", 0), w90 = f("calibration_word", "precision", 0.9),
+          b90 = f("calibration_word", "precision_below", 0.9), k90 = f("calibration_word", "kept_share", 0.9);
+    const wer = rows.filter(x => x.kind === "bench" && x.metric === "wer" && String(x.config || "").startsWith("large-v3-turbo int8 b1 seg10"))
+                    .sort((a, b) => (b.recorded_at || 0) - (a.recorded_at || 0))[0];
+    if (wer) setMetric("mAcc", `${Math.round((1 - wer.value) * 100)}%`, lvl(1 - wer.value, 0.9, 0.75),
+                       `1 − word error rate, ${wer.dataset} read-speech test`);
+    if (w90 && b90 && k90 && all) $("accnote").textContent =
+      `About these numbers: confidence is the model's own estimate, not verified accuracy. On the ${w90.dataset} reference (read speech), ` +
+      `${Math.round(all.value * 100)}% of all words were correct; words with ≥ 90% confidence were ${Math.round(w90.value * 100)}% correct ` +
+      `(${Math.round(k90.value * 100)}% of words); underlined words only ${Math.round(b90.value * 100)}%. Live TV speech is harder than the test set.`;
+  } catch (e) { /* optional */ }
+}
+
+// ---- events
 function segConf(ev) {
   const ps = (ev.words || []).map(w => w && w.p).filter(x => typeof x === "number");
   return ev.confidence ?? (ps.length ? ps.reduce((a, b) => a + b, 0) / ps.length : null);
 }
-function onEvent(ev) {
-  if (!ev || !ev.channel_id) return;
-  const p = panel(ev.channel_id);
+function onEvent(ev, history = false) {
+  if (!ev || ev.channel_id !== cid) return;
   if (ev.type === "refine_skipped" || ev.type === "error") return;
-  if (ev.type === "partial") { if (ev.segment_key) p.segs.set("k:" + ev.segment_key, ev); schedule(p); return; }
-  if (ev.segment_key) p.segs.delete("k:" + ev.segment_key);
-  const had = p.segs.has(ev.segment_id);
-  if (ev.type === "final" && !ev.text_raw) { p.segs.delete(ev.segment_id); schedule(p); return; }
-  if (ev.type === "final" && had && p.segs.get(ev.segment_id).type === "refined") return;  // late duplicate
-  p.segs.set(ev.segment_id, ev);
-  if (p.segs.size > 2 * MAX_SEGS) {   // drop the oldest segments
-    const old = [...p.segs.entries()].sort((a, b) => a[1].start_utc - b[1].start_utc).slice(0, p.segs.size - MAX_SEGS);
-    for (const [k] of old) p.segs.delete(k);
+  if (ev.type === "partial") { if (ev.segment_key) segs.set("k:" + ev.segment_key, ev); schedule(); return; }
+  if (ev.segment_key) segs.delete("k:" + ev.segment_key);
+  const had = segs.has(ev.segment_id);
+  if (ev.type === "final" && !ev.text_raw) { segs.delete(ev.segment_id); schedule(); return; }
+  if (ev.type === "final" && had && segs.get(ev.segment_id).type === "refined") return;   // late duplicate
+  segs.set(ev.segment_id, ev);
+  if (segs.size > 2 * MAX_SEGS) {
+    const old = [...segs.entries()].sort((a, b) => a[1].start_utc - b[1].start_utc).slice(0, segs.size - MAX_SEGS);
+    for (const [k] of old) segs.delete(k);
   }
-  if (ev.type === "refined") p.nRef++; else if (!had) p.nSeg++;
+  if (!had) nSeg++;
   const lat = (ev.timings || {}).latency_s ?? ev.latency_s;
-  p.stats.push({ lat: ev.type === "refined" ? null : lat, c: segConf(ev) });
-  if (p.stats.length > 4 * STATS_N) p.stats.splice(0, p.stats.length - 2 * STATS_N);
-  updateStats(p);
-  schedule(p);
+  stats.push({ lat: ev.type === "refined" || history ? null : lat, c: segConf(ev) });   // delay: live lines only
+  if (stats.length > 4 * STATS_N) stats.splice(0, stats.length - 2 * STATS_N);
+  updateStats();
+  schedule();
 }
-function rerenderAll() { for (const p of panels.values()) render(p); }
-minSel.addEventListener("change", rerenderAll);
-
-// ---- data loading
-async function loadHistory(p, around) {
-  const q = new URLSearchParams({ limit: "200" });
-  if (around) { q.set("from", String(around - 300)); q.set("to", String(around + 300)); }
+async function loadHistory() {
   try {
-    const r = await fetch(`/channels/${encodeURIComponent(p.cid)}/transcripts?${q}`);
-    if (!r.ok) return;
-    for (const row of await r.json()) onEvent(Object.assign({}, row, { type: row.pass === "refined" ? "refined" : "final" }));
-    render(p);
-    p.lines.scrollTop = p.lines.scrollHeight;
+    const rows = await api(`/channels/${encodeURIComponent(cid)}/transcripts?limit=200`);
+    for (const row of rows) onEvent(Object.assign({}, row, { type: row.pass === "refined" ? "refined" : "final" }), true);
+    render(); lines.scrollTop = lines.scrollHeight;
   } catch (e) { /* API may be starting */ }
 }
-async function loadChannels() {
-  const only = params.get("ch");
-  try {
-    const r = await fetch("/channels");
-    if (!r.ok) return;
-    for (const c of await r.json()) {
-      if (!c.enabled || (only && c.id !== only)) continue;
-      const p = panel(c.id, c.name);
-      const t = parseFloat(params.get("t"));
-      await loadHistory(p, only === c.id && !isNaN(t) ? t : null);
-      if (only === c.id && !isNaN(t)) jumpTo(p, t);
-    }
-  } catch (e) { /* retry on next reload */ }
-}
-function jumpTo(p, t) {   // deep link from Grafana: highlight the sentence and play video from it
-  let best = null;
-  for (const row of p.lines.querySelectorAll(".sent")) {
-    if (parseFloat(row.dataset.t) <= t + 0.5) best = row;
-  }
-  if (best) { highlight(p, best); best.scrollIntoView({ block: "center" }); p.holdScroll = true; }
-  const tryseek = (n) => { if (!seekTo(p, t) && n > 0) setTimeout(() => tryseek(n - 1), 1500); };
-  tryseek(6);   // wait for the playlist to load
-}
-async function loadAccuracyNote() {
-  try {
-    const r = await fetch("/accuracy");
-    if (!r.ok) return;
-    const rows = await r.json();
-    const f = (m, t) => rows.find(x => x.kind === "calibration_word" && x.metric === m && Math.abs(x.threshold - t) < 1e-6);
-    const w90 = f("precision", 0.9), b90 = f("precision_below", 0.9), k90 = f("kept_share", 0.9);
-    const all = f("precision", 0);
-    if (w90 && b90 && k90 && all) document.getElementById("accnote").textContent =
-      `Confidence is the model's own word probability, not verified accuracy. Measured on ${w90.dataset} (read speech): ` +
-      `${Math.round(all.value * 100)}% of all words correct; words ≥ 90% confidence ${Math.round(w90.value * 100)}% correct ` +
-      `(${Math.round(k90.value * 100)}% of words); underlined words (< 90%) only ${Math.round(b90.value * 100)}% correct.`;
-  } catch (e) { /* optional */ }
-}
-
 let delay = 500;
 function connect() {
-  const chans = params.get("ch") || params.get("channels") || "";
   const proto = location.protocol === "https:" ? "wss" : "ws";
-  const ws = new WebSocket(`${proto}://${location.host}/ws/live${chans ? "?channels=" + encodeURIComponent(chans) : ""}`);
-  const conn = document.getElementById("conn");
-  ws.onopen = () => { conn.textContent = "live"; conn.className = "pill ok"; delay = 500; };
+  const ws = new WebSocket(`${proto}://${location.host}/ws/live?channels=${encodeURIComponent(cid)}`);
+  const conn = $("conn");
+  ws.onopen = () => { conn.innerHTML = `<span class="dot"></span>live`; conn.className = "pill ok"; delay = 500; };
   ws.onmessage = (m) => { try { onEvent(JSON.parse(m.data)); } catch (e) { console.warn(e); } };
-  ws.onclose = () => {
-    conn.textContent = "reconnecting…"; conn.className = "pill bad";
-    setTimeout(connect, delay); delay = Math.min(delay * 2, 10000);
-  };
+  ws.onclose = () => { conn.textContent = "reconnecting…"; conn.className = "pill bad";
+                       setTimeout(connect, delay); delay = Math.min(delay * 2, 10000); };
 }
-let st = null;
-document.getElementById("q").addEventListener("input", (e) => {
-  clearTimeout(st);
-  st = setTimeout(async () => {
-    const q = e.target.value.trim();
-    const box = document.getElementById("results");
-    box.replaceChildren();
-    if (!q) return;
-    try {
-      const r = await fetch("/search?q=" + encodeURIComponent(q));
-      const j = await r.json();
-      for (const row of j.results || []) {
-        const n = document.createElement("div");
-        n.className = "seg";
-        const sent = document.createElement("div");
-        sent.className = "sent";
-        sent.innerHTML = `<span class="t"></span><span class="txt" dir="auto"></span><span class="c"></span>`;
-        sent.querySelector(".t").textContent = fmtLocal(row.start_utc);
-        sent.querySelector(".txt").textContent = row.text_raw;
-        sent.querySelector(".c").textContent = row.channel_id;
-        sent.title = "open this moment with video and transcript (Archive)";
-        sent.onclick = () => { location.href = `/ui/archive?ch=${encodeURIComponent(row.channel_id)}&t=${row.start_utc}`; };
-        n.appendChild(sent);
-        box.appendChild(n);
-      }
-    } catch (err) { console.warn(err); }
-  }, 300);
-});
 
-loadChannels().then(connect);
-loadAccuracyNote();
+// ---- controls
+$("liveBtn").onclick = goLive;
+$("onlyClear").onchange = render;
+$("szUp").onclick = () => { urduSize(2); render(); };
+$("szDown").onclick = () => { urduSize(-2); render(); };
+$("exBtn").onclick = () => {
+  const q = new URLSearchParams({ format: $("exFmt").value, from: String(Date.now() / 1000 - parseInt($("exRange").value, 10)),
+                                  min_conf: String(minConf()), tz: localTz() });
+  location.href = `/channels/${encodeURIComponent(cid)}/export?${q}`;
+};
+$("gGo").onclick = () => {
+  const t = fromInputs($("gDate").value, $("gTime").value);
+  if (t == null) return toast("Pick a date and a time", true);
+  if (t > Date.now() / 1000 + 5) return toast("That time is in the future", true);
+  if (Date.now() / 1000 - t < LIVE_WIN_S - 30 && seekTo(t)) { vidT = t; markPlaying(lines, t); return; }
+  openArchive(t);
+};
+$("sForm").onsubmit = (e) => { e.preventDefault(); const q = $("q").value.trim(); if (q) location.href = `/ui/archive?ch=${encodeURIComponent(cid)}&q=${encodeURIComponent(q)}`; };
+// ---- stream link: show it, change it in place (no server files)
+let curUrl = "", noSignalSince = null, setOpen = false;
+function showSetLink(open, why) {
+  setOpen = open; $("setLink").hidden = !open;
+  if (open) { $("setUrl").value = ""; $("setTitle").textContent = why || "📡 Enter the stream link to start"; setTimeout(() => $("setUrl").focus(), 50); }
+}
+$("linkEdit").onclick = (e) => { e.preventDefault(); showSetLink(true, "📡 Change the stream link"); };
+$("setCancel").onclick = () => showSetLink(false);
+$("setForm").onsubmit = async (e) => {
+  e.preventDefault();
+  const url = normalizeLink($("setUrl").value);
+  if (!url) return toast("Paste the stream link first", true);
+  try {
+    if (cid) await api(`/channels/${encodeURIComponent(cid)}`, { method: "PATCH", json: { url, enabled: true } });
+    else { await api("/channels", { method: "POST", json: { id: "ch1", name: "Channel 1", url, audio_track: { index: 0, language: "urd" }, language: "ur", enabled: true } }); cid = "ch1"; }
+    curUrl = url; $("linkTxt").textContent = url; noSignalSince = null;
+    showSetLink(false);
+    toast("Connecting to " + url + " — video and text start about 20 s after the stream arrives");
+    if (!hls) setTimeout(() => location.reload(), 15000);
+  } catch (err) { toast(err.message, true); }
+};
+
+$("chSel").onchange = () => { location.search = `?ch=${encodeURIComponent($("chSel").value)}`; };
+
+if (EMBED) {   // inside Grafana there is no top bar: own light/dark switch
+  $("embTheme").hidden = false;
+  setTheme(document.documentElement.dataset.theme);
+  $("embTheme").onclick = () => setTheme(document.documentElement.dataset.theme === "dark" ? "light" : "dark");
+}
+(async function start() {
+  const now = Date.now() / 1000 - 300, [d, hm] = toInputs(now);
+  $("gDate").value = d; $("gTime").value = hm + ":00";
+  const { chans, cur } = await mainChannel();
+  if (!cur) { showSetLink(true); $("linkPill").hidden = true; }
+  if (!cur) { $("lines").innerHTML = `<div class="empty">No channel configured yet. Add the stream URL on <a href="/ui/channels">Channel setup</a>.</div>`; $("conn").textContent = "no channel"; return; }
+  cid = cur.id;
+  try { const full = (await api("/channels")).find(c => c.id === cid); curUrl = full ? full.url : ""; } catch (e) { /* */ }
+  $("linkTxt").textContent = curUrl || "no link";
+  $("chName").textContent = cur.name || cur.id;
+  document.title = `${cur.name || cur.id} · Live`;
+  const on = chans.filter(c => c.enabled !== false);
+  if (on.length > 1) { for (const c of on) $("chSel").add(new Option(c.name, c.id)); $("chSel").value = cid; $("chSel").style.display = "block"; }
+  initVideo();
+  await loadHistory();
+  connect();
+  const t = parseFloat(params.get("t"));
+  if (!isNaN(t)) { replay = true; vidT = t; markPlaying(lines, t); const go = (n) => { if (seekTo(t)) return; if (n > 0) setTimeout(() => go(n - 1), 1500); else openArchive(t); }; go(5); }
+  pollStream(); setInterval(pollStream, 10000);
+  loadAccuracy();
+})();
 </script>
 </body>
 </html>

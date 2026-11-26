@@ -141,6 +141,10 @@ class AsrConfig(_Model):
     refine_queue_max: int = 64
     fast_lag_alert_s: float = 5.0
     refine_max_lag_s: float = 300.0
+    # Load shedding for hosts that cannot keep up: FAST audio older than this is skipped and
+    # recorded as a gap (stream_events "fast_skipped"), so live text stays near real time.
+    # 0 = never drop (complete transcript, latency may grow without bound when overloaded).
+    fast_max_lag_s: float = 0.0
     fast_wer_margin: float = 0.03  # absolute WER margin turbo vs large-v3
     use_hotwords: bool = True
     prompt_max_chars: int = 200
@@ -153,6 +157,7 @@ class GuardsConfig(_Model):
     compression_ratio_threshold: float = 2.4
     max_ngram_repeats: int = 4
     ngram_n: int = 3
+    min_repeat_run: int = 3  # trim a word/phrase repeated this many times in a row (≤1: off)
     blocklist_path: str = "config/hallucination_blocklist.txt"
 
 
