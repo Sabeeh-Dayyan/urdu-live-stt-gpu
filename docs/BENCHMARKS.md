@@ -36,6 +36,20 @@ RTF = inference seconds ÷ programme seconds (VAD-gated). Simulated latency = sp
 | large-v3 int8 b1 seg8 t8 pack28 | 24.3% | 16.1% | 24.3% | 1.064 | 1.328 | 28.67 / 38.77 | 0.0% / 0.0% | 0.21 / 0.47 | 40 | 10101 |
 | large-v3 int8 b5 seg8 t8 pack28 | 23.8% | 16.2% | 23.8% | 1.272 | 1.588 | 76.44 / 104.37 | 0.0% / 0.0% | 0.21 / 0.47 | 40 | 10602 |
 
+### Segment length on this CPU (`make bench MATRIX=latency` / `MATRIX=latency6`)
+
+One run each, 2026-11-25/26, same reference programme.
+
+| Config | WER | CER | RTF | sim. lat p50/p95 (s) | ts err p50/p95 (s) |
+|---|---|---|---|---|---|
+| large-v3-turbo int8 b1 seg10 t8 pack28 | 26.4% | 16.2% | 1.034 | 35.17 / 47.21 | 0.19 / 0.58 |
+| **large-v3-turbo int8 b1 seg8 t8 pack16** (CPU profiles) | **20.7%** | **9.2%** | 0.982 | **12.89 / 22.51** | 0.20 / 0.52 |
+| large-v3-turbo int8 b1 seg6 t8 pack12 | 22.4% | 11.2% | 1.001 | 31.03 / 73.84 | 0.21 / 0.82 |
+| large-v3-turbo int8 b1 seg6 t8 pack18 | 22.9% | 11.3% | 1.006 | 13.63 / 21.71 | 0.20 / 0.56 |
+
+Shorter segments mean more calls, each paying the fixed 30 s encoder pass, and give Whisper less
+context; at RTF ≈ 1 the extra calls turn into queueing. 8 s / 16 s is kept.
+
 ## Model decision (from the table above)
 
 * **FAST** = `large-v3-turbo int8 b1 seg8 t8 pack28` — WER 23.3%, RTF 0.953. Within the configured 3-pt margin of large-v3 or the fastest real-time option.

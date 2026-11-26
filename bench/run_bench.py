@@ -66,6 +66,7 @@ MATRICES = {
     # Smaller chunks / smaller packs for lower delay (CPU), vs the current live FAST config.
     "latency": [Cfg(T, 1, 10, pack=28), Cfg(T, 1, 8, pack=16), Cfg(T, 1, 6, pack=12),
                 Cfg(T, 1, 4, pack=12), Cfg(T, 1, 6, pack=18)],
+    "latency6": [Cfg(T, 1, 6, pack=12), Cfg(T, 1, 6, pack=18)],
     "turbo": [Cfg(T, 1), Cfg(T, 2), Cfg(T, 5), Cfg(T, 1, 6), Cfg(T, 1, 10), Cfg(T, 1, threads=16)],
     "large": [Cfg(L, 1), Cfg(L, 5)],
 }

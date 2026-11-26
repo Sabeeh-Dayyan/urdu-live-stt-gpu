@@ -128,7 +128,7 @@ async function nav(active) {
   if (EMBED) { document.body.classList.add("embed"); return; }
   const n = document.createElement("nav");
   n.className = "top";
-  n.innerHTML = `<a class="brand" href="/"><span class="logo">◉</span>Urdu Live Transcription</a>` +
+  n.innerHTML = `<a class="brand" href="/"><span class="logo" aria-hidden="true"><i></i><i></i><i></i><i></i></span>Urdu Live Transcription</a>` +
     PAGES.map(([k, href, label]) => `<a class="tab${k === active ? " on" : ""}" href="${href}">${label}</a>`).join("") +
     `<span class="sp"></span><span id="navHealth" class="pill" title="Server health">checking…</span>
      <a id="navGrafana" class="pill" target="_blank" rel="noopener" title="Metrics dashboard">Grafana ↗</a>
@@ -287,3 +287,24 @@ function hlsSeekEpoch(h, video, t) {
 async function channelList() {   // live channels for selects: [{id, name}]
   try { return (await api("/channels")).map(c => ({ id: c.id, name: c.name || c.id, enabled: c.enabled })); } catch (e) { return []; }
 }
+
+// Depth: cards rise with a slight 3D tilt toward the pointer; cards fade in on load. Off for reduced motion / touch.
+(function fx() {
+  if (matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+  const start = () => {
+    document.querySelectorAll(".wrap > .card, .wrap > .split > .card, .metrics > .metric, .wrap > .grid2 > .card")
+      .forEach((el, i) => { el.classList.add("fx-in"); el.style.animationDelay = `${Math.min(i, 8) * 55}ms`;
+        el.addEventListener("animationend", () => { el.classList.remove("fx-in"); el.style.animationDelay = ""; }, { once: true }); });
+  };
+  document.readyState === "loading" ? document.addEventListener("DOMContentLoaded", start) : start();
+  if (!matchMedia("(hover: hover)").matches) return;
+  document.addEventListener("pointermove", (e) => {
+    const el = e.target.closest && e.target.closest(".metric");
+    document.querySelectorAll(".metric.tilt").forEach((m) => { if (m !== el) { m.classList.remove("tilt"); m.style.transform = ""; } });
+    if (!el) return;
+    const r = el.getBoundingClientRect(), x = (e.clientX - r.left) / r.width, y = (e.clientY - r.top) / r.height;
+    el.classList.add("tilt");
+    el.style.setProperty("--mx", `${x * 100}%`); el.style.setProperty("--my", `${y * 100}%`);
+    el.style.transform = `perspective(700px) rotateX(${(0.5 - y) * 7}deg) rotateY(${(x - 0.5) * 9}deg) translateY(-3px)`;
+  }, { passive: true });
+})();

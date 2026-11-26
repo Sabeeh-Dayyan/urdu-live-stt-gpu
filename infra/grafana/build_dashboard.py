@@ -75,7 +75,7 @@ DELAY_STEPS = [{"color": "green", "value": None}, {"color": "orange", "value": 2
                {"color": "red", "value": 60}]
 ch_sel = 'channel="$channel"'
 PILL = ("padding:5px 12px;border-radius:999px;border:1px solid rgba(128,128,128,.35);"
-        "text-decoration:none;font-size:13px;font-weight:500;white-space:nowrap")
+        "text-decoration:none;font-size:13.5px;font-weight:600;white-space:nowrap;color:#1f8f84")
 THEME_LINK = ("?orgId=1&theme={t}&var-ui_theme={t}&var-channel=${{channel}}&var-pg=${{pg}}"
               "&var-ui_url=${{ui_url}}&var-min_conf=${{min_conf}}&from=now-30m&to=now&refresh=5s")
 
@@ -94,13 +94,13 @@ def header() -> dict:
         '<div style="display:flex;align-items:center;gap:12px 16px;flex-wrap:wrap;'
         'padding:2px 64px 2px 2px">'  # right padding keeps clear of Grafana's hover menu
         '<div style="width:40px;height:40px;border-radius:12px;display:grid;place-items:center;'
-        'color:#fff;font-size:20px;background:linear-gradient(135deg,#4f46e5,#0ea5e9)">◉</div>'
+        'color:#fff;font-size:20px;background:#16191d;box-shadow:inset 0 -3px 0 #c96a12">◉</div>'
         '<div><div style="font-size:20px;font-weight:700;line-height:1.2">Urdu Live '
         'Transcription</div><div style="font-size:13px;opacity:.7">Channel <b>${channel}</b> · '
         'live monitoring, refreshed every 5 s</div></div>' + theme +
         '<span style="flex:1"></span>'
-        f'<a href="{UI}/" target="_blank" rel="noopener" style="{PILL};background:#4f46e5;'
-        'color:#fff;border-color:#4f46e5">▶ Open live app</a>' +
+        f'<a href="{UI}/" target="_blank" rel="noopener" style="{PILL};background:#0b6e66;'
+        'color:#fff;border-color:#0b6e66">▶ Open live app</a>' +
         "".join(f'<a href="{UI}{h}" target="_blank" rel="noopener" style="{PILL}">{t}</a>'
                 for t, h in links) + "</div>")
     return {"id": 120, "type": "text", "title": "", "transparent": True,

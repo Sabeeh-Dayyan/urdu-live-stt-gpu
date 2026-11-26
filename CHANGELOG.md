@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.2.5 — 2026-11-26
+- UI: new broadcast-desk colour scheme (warm paper, graphite, deep teal actions, amber "now"
+  highlight; matching dark theme), larger and higher-contrast buttons, tabs and pills, visible
+  keyboard focus, animated equaliser logo, card entrance and pointer-tilt depth effects
+  (disabled for `prefers-reduced-motion` and touch). Grafana header and diagrams follow the palette.
+- Bench: `latency6` matrix. 6 s segments did not beat 8 s on the laptop CPU (pack 12: delay p50
+  31.0 s, WER 22.4 %; pack 18: 13.6 s, 22.9 %; vs 12.9 s, 20.7 % at 8 s / 16 s), so the CPU
+  profiles keep 8 s / 16 s.
+
 ## 0.2.4 — 2026-11-26
 - **One-step stream entry**: the live page shows the stream link with **✎ Change** and opens a
   large "Enter the stream link" box by itself when nothing arrives; `make stream URL=…` /
