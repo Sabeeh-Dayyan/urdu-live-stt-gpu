@@ -2,7 +2,7 @@
  "uid": "live-stt",
  "title": "Urdu Live Transcription · Monitoring",
  "schemaVersion": 39,
- "version": 15,
+ "version": 17,
  "refresh": "5s",
  "time": {
   "from": "now-30m",
@@ -880,7 +880,7 @@
      "editorMode": "code",
      "rawQuery": true,
      "format": "table",
-     "rawSql": "SELECT 1 - value FROM accuracy_results WHERE kind='bench' AND metric='wer' AND config LIKE 'large-v3-turbo int8 b1 seg10%' ORDER BY recorded_at DESC LIMIT 1"
+     "rawSql": "SELECT 1 - value FROM accuracy_results WHERE kind='bench' AND metric='wer' AND config = '${fast_cfg}' ORDER BY recorded_at DESC LIMIT 1"
     }
    ]
   },
@@ -2356,6 +2356,16 @@
       "selected": false
      }
     ]
+   },
+   {
+    "name": "fast_cfg",
+    "type": "constant",
+    "hide": 2,
+    "query": "large-v3-turbo int8 b1 seg8 t8 pack16",
+    "current": {
+     "text": "large-v3-turbo int8 b1 seg8 t8 pack16",
+     "value": "large-v3-turbo int8 b1 seg8 t8 pack16"
+    }
    },
    {
     "name": "min_conf",

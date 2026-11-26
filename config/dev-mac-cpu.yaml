@@ -11,7 +11,7 @@ asr:
   # set and runs at RTF > 1 here, so REFINE on CPU = turbo beam 5 with ±0.5 s context (no extra RAM).
   refine: {model: large-v3-turbo, beam_size: 5, best_of: 5}
   batched: false
-  pack_s: 16              # pack queued segments into one encoder pass (CPU throughput)
+  pack_s: 16              # pack queued segments into one encoder pass (measured best on news: see BENCHMARKS)
   refine_max_lag_s: 1800  # CPU: REFINE catches up during non-speech; older work is skipped (flagged)
   fast_max_lag_s: 120      # overloaded host: live text stays ≤ ~2 min behind; skipped audio is logged as a gap
 

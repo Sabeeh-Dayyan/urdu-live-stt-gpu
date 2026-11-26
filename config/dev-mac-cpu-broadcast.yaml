@@ -16,7 +16,7 @@ asr:
   fast:   {model: large-v3-turbo, beam_size: 1, best_of: 1}
   refine: {model: large-v3-turbo, beam_size: 5, best_of: 5}
   batched: false
-  pack_s: 16
+  pack_s: 16              # pack queued segments into one encoder pass (measured best on news: see BENCHMARKS)
   refine_max_lag_s: 1800
   fast_max_lag_s: 120      # overloaded host: live text stays ≤ ~2 min behind; skipped audio is logged as a gap
 

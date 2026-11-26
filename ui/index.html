@@ -277,10 +277,13 @@ async function loadAccuracy() {
     const f = (k, m, t) => rows.find(x => x.kind === k && x.metric === m && Math.abs((x.threshold ?? 0) - t) < 1e-6);
     const all = f("calibration_word", "precision", 0), w90 = f("calibration_word", "precision", 0.9),
           b90 = f("calibration_word", "precision_below", 0.9), k90 = f("calibration_word", "kept_share", 0.9);
-    const wer = rows.filter(x => x.kind === "bench" && x.metric === "wer" && String(x.config || "").startsWith("large-v3-turbo int8 b1 seg10"))
+    // Accuracy measured for exactly the running FAST configuration (label from /ui/config).
+    const label = ((await loadConfig()).asr || {}).bench_label;
+    const wer = rows.filter(x => x.kind === "bench" && x.metric === "wer" && x.config === label)
                     .sort((a, b) => (b.recorded_at || 0) - (a.recorded_at || 0))[0];
     if (wer) setMetric("mAcc", `${Math.round((1 - wer.value) * 100)}%`, lvl(1 - wer.value, 0.9, 0.75),
-                       `1 − word error rate, ${wer.dataset} read-speech test`);
+                       `words correct (1 − WER) for this exact setup, on read Urdu speech (${wer.dataset})`);
+    else setMetric("mAcc", "not measured", "", "no benchmark recorded for this setup (stt bench + record-accuracy)");
     if (w90 && b90 && k90 && all) $("accnote").textContent =
       `About these numbers: confidence is the model's own estimate, not verified accuracy. On the ${w90.dataset} reference (read speech), ` +
       `${Math.round(all.value * 100)}% of all words were correct; words with ≥ 90% confidence were ${Math.round(w90.value * 100)}% correct ` +
@@ -308,7 +311,11 @@ function onEvent(ev, history = false) {
   }
   if (!had) nSeg++;
   const lat = (ev.timings || {}).latency_s ?? ev.latency_s;
-  stats.push({ lat: ev.type === "refined" || history ? null : lat, c: segConf(ev) });   // delay: live lines only
+  // Delay counts FAST lines only: live ones, plus history lines from the last 10 minutes (a stored
+  // fast row's latency_s is its live delay; refined rows carry the refine delay instead).
+  const fastRow = ev.type === "final";
+  const recent = !history || (ev.end_utc && Date.now() / 1000 - ev.end_utc < 600);
+  stats.push({ lat: fastRow && recent ? lat : null, c: segConf(ev) });
   if (stats.length > 4 * STATS_N) stats.splice(0, stats.length - 2 * STATS_N);
   updateStats();
   schedule();

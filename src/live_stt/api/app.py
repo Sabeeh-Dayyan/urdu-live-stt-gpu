@@ -53,6 +53,14 @@ SEG_COLS = """channel_id, segment_id, start_utc, end_utc, pass, model, text_raw,
               words, avg_logprob, no_speech_prob, flags, latency_s, confidence"""
 
 
+def bench_label(s) -> str:
+    """The `stt bench` label of the live FAST configuration (bench/run_bench.py:Cfg.label), so the
+    UI can show the accuracy measured for exactly the configuration that is running."""
+    a, pack = s.asr, f" pack{s.asr.pack_s:g}" if s.asr.pack_s else ""
+    return (f"{a.fast.model} {a.compute_type} b{a.fast.beam_size} seg{s.streaming.max_segment_s:g} "
+            f"t{a.cpu_threads}{pack}")
+
+
 def parse_time(v: str | None) -> datetime | None:
     if v is None or v == "":
         return None
@@ -680,7 +688,8 @@ def create_app(s: Settings) -> FastAPI:
                             "pass": s.uploads.pass_,
                             "extensions": sorted(U.ALLOWED_EXT)},
                 "asr": {"device": s.asr.device, "fast": s.asr.fast.model,
-                        "refine": s.asr.refine.model if s.asr.refine_enabled else None},
+                        "refine": s.asr.refine.model if s.asr.refine_enabled else None,
+                        "bench_label": bench_label(s)},
                 "url_schemes": list(URL_SCHEMES)}
 
     @app.get("/ui/{name}")

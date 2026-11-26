@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.2.6 — 2026-11-27
+- The "Tested accuracy" card and the Grafana accuracy panel show the WER measured for exactly the
+  running FAST configuration (`/ui/config` → `asr.bench_label`; Grafana constant `fast_cfg`), or
+  "not measured"; previously both were pinned to an old 10 s-segment run.
+- The Delay card fills from the last 10 minutes of stored lines instead of waiting for new ones.
+- Live news measurement (BENCHMARKS.md): p50 14.5 s, p90 18.7 s, nothing skipped; packing ≤ 28 s
+  tested and rejected (slower).
+- README results updated to the current live setting; note on how the repos are exported.
+
 ## 0.2.5 — 2026-11-26
 - UI: new broadcast-desk colour scheme (warm paper, graphite, deep teal actions, amber "now"
   highlight; matching dark theme), larger and higher-contrast buttons, tabs and pills, visible

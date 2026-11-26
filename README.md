@@ -126,8 +126,9 @@ spontaneous broadcast speech is harder and its reference set is still being prep
 
 | Configuration | WER | CER | Real-time factor | Notes |
 |---|---|---|---|---|
-| **large-v3-turbo int8, greedy, 10 s segments, packing** (live FAST) | **23.8 %** | **12.9 %** | **0.90** | used in production configs |
-| large-v3-turbo int8, greedy, 8 s segments, packing | 23.3 % | 12.8 % | 0.95 | |
+| **large-v3-turbo int8, greedy, 8 s segments, packing ≤ 16 s** (live FAST) | **20.7 %** | **9.2 %** | **0.98** | CPU profiles; simulated delay p50 12.9 s |
+| large-v3-turbo int8, greedy, 8 s segments, packing ≤ 28 s | 23.3 % | 12.8 % | 0.95 | |
+| large-v3-turbo int8, greedy, 10 s segments, packing ≤ 28 s | 23.8 % | 12.9 % | 0.90 | previous live setting |
 | large-v3-turbo int8, beam 5 | 23.7 % | 12.9 % | 1.00 | REFINE on CPU |
 | large-v3 int8, beam 5 | 23.8 % | 16.2 % | 1.27 | no accuracy gain over turbo on this set |
 
@@ -166,10 +167,11 @@ confidence is **not** a substitute for measured accuracy.
 | Metric | p50 | p95 |
 |---|---|---|
 | end of speech → live text (read-speech programme, 420 s) | 13.6 s | 22.2 s |
-| end of speech → live text (live Urdu TV news, short sample) | 15.8 s | — |
+| end of speech → live text (Urdu TV news bulletin, 10 min, 82 lines, 0 s skipped) | 14.5 s | 18.7 s (p90; max 23.9 s) |
 | end of speech → refined text (read speech) | 110.6 s | 178.1 s |
 
-Latency on CPU is dominated by segment length (10 s) and inference time. Lower latency needs a GPU
+Latency on CPU is dominated by segment length (8 s) and inference time. Packing up to 28 s
+instead of 16 s was tried on the same news feed and was slower (p50 16.2 s, max 31.3 s). Lower latency needs a GPU
 and streaming mode (see the GPU edition); **on GPU it has not been measured yet**.
 ### Robustness
 
@@ -179,7 +181,7 @@ and streaming mode (see the GPU edition); **on GPU it has not been measured yet*
 | 4.5 h soak, looping programme with a timestamp reset every loop | 0 crashes or restarts, **0 lost segments** (1 868 emitted, 1 867 done, 2 in flight at stop). Worker/persister/API memory flat; ASR memory +≈130 MB/h (open issue) |
 | Clock | median drift −50 ms; re-anchors on every discontinuity |
 | Word timestamps vs true speech onsets (file input) | 0.13–0.21 s |
-| Automated tests | 200+ unit + integration tests (property-based, real Redis/Postgres, real ffmpeg streams, live UDP, real model end-to-end) |
+| Automated tests | 208 unit + integration tests (property-based, real Redis/Postgres, real ffmpeg streams, live UDP, real model end-to-end) |
 
 ### Capacity
 
@@ -263,6 +265,10 @@ testbed/        UDP test senders, FLEURS reference set (CC-BY-4.0)
 tests/          unit (incl. property-based) + integration
 docs/           ARCHITECTURE · BENCHMARKS · DEPLOYMENT · RUNBOOK · PLAN (status)
 ```
+
+This repository is exported from the development monorepo (shared by the CPU and GPU editions) by
+`scripts/export_repos.py`, which drops local data and the other edition's files. Each commit here
+is one release; [CHANGELOG.md](CHANGELOG.md) lists what changed and the measurements behind it.
 
 ## Known limitations
 

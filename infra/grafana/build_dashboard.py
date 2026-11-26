@@ -11,6 +11,17 @@ import os
 from pathlib import Path
 
 DASH = Path(__file__).parent / "dashboards" / "live-stt.json"
+ROOT = Path(__file__).resolve().parents[2]
+
+
+def fast_bench_label(profile: str = "config/dev-mac-cpu.yaml") -> str:
+    """`stt bench` label of a profile's FAST setup (same format as api/app.py:bench_label), so the
+    accuracy panel shows the WER measured for the configuration that actually runs."""
+    import sys
+    sys.path.insert(0, str(ROOT / "src"))
+    from live_stt.api.app import bench_label
+    from live_stt.settings import load_settings
+    return bench_label(load_settings(str(ROOT / profile)))
 PG = {"type": "grafana-postgresql-datasource", "uid": "${pg}"}
 PROM = {"type": "prometheus", "uid": "prometheus"}
 UI = "${ui_url}"  # dashboard variable (textbox); default from STT_UI_URL at build time
@@ -187,7 +198,7 @@ def panels() -> list[dict]:
     y += 1
     out.append(stat(108, "Word accuracy (1 − WER)", 0, y, 6, sql(
         "A", "SELECT 1 - value FROM accuracy_results WHERE kind='bench' AND metric='wer' "
-             "AND config LIKE 'large-v3-turbo int8 b1 seg10%' ORDER BY recorded_at DESC LIMIT 1"),
+             "AND config = '${fast_cfg}' ORDER BY recorded_at DESC LIMIT 1"),
         decimals=1, thresholds=CONF_STEPS,
         desc="1 − WER of the live (FAST) configuration against hand-made reference transcripts "
              "(read speech, FLEURS)."))
@@ -298,6 +309,7 @@ def panels() -> list[dict]:
 
 
 def templating() -> dict:
+    FAST_CFG = fast_bench_label()
     return {"list": [
         {"name": "pg", "label": "Database", "type": "datasource",
          "query": "grafana-postgresql-datasource", "current": {}},  # first available
@@ -313,6 +325,8 @@ def templating() -> dict:
         {"name": "ui_theme", "type": "custom", "hide": 2, "query": "auto,light,dark",
          "current": {"text": "auto", "value": "auto"},   # auto = follow the computer's setting
          "options": [{"text": v, "value": v, "selected": v == "auto"} for v in ("auto", "light", "dark")]},
+        {"name": "fast_cfg", "type": "constant", "hide": 2, "query": FAST_CFG,
+         "current": {"text": FAST_CFG, "value": FAST_CFG}},
         {"name": "min_conf", "label": "Min confidence", "type": "custom",
          "query": "0,0.8,0.9,0.95", "current": {"text": "0.9", "value": "0.9"},
          "options": [{"text": v, "value": v, "selected": v == "0.9"}

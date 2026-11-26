@@ -50,6 +50,21 @@ One run each, 2026-11-25/26, same reference programme.
 Shorter segments mean more calls, each paying the fixed 30 s encoder pass, and give Whisper less
 context; at RTF ≈ 1 the extra calls turn into queueing. 8 s / 16 s is kept.
 
+### Packing on a live news bulletin (full system, 2026-11-27)
+
+One channel: a 22 min 45 s Urdu TV news bulletin (local test recording, not in the repo) looped
+over UDP; dev-mac-cpu-broadcast profile; nothing else heavy running. 10-minute windows of
+`/channels/ch1/transcripts` and `fast_skipped` events.
+
+| Packing | FAST lines | delay p50 | p90 | max | speech skipped | refined lines |
+|---|---|---|---|---|---|---|
+| **≤ 16 s** (kept) | 82 | **14.5 s** | **18.7 s** | **23.9 s** | 0 s | 1 |
+| ≤ 28 s | 67 | 16.2 s | 24.1 s | 31.3 s | 0 s | 1 |
+
+Both keep up with continuous speech; bigger packs only make each call longer. An earlier window
+measured while the test suite and a benchmark ran on the same CPU skipped 334 s of 15.5 min
+(load shedding working as designed): the live system needs the CPU to itself.
+
 ## Model decision (from the table above)
 
 * **FAST** = `large-v3-turbo int8 b1 seg8 t8 pack28` — WER 23.3%, RTF 0.953. Within the configured 3-pt margin of large-v3 or the fastest real-time option.
