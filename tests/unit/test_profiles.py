@@ -9,10 +9,11 @@ from live_stt.api.app import bench_label
 from live_stt.settings import load_settings
 
 ROOT = Path(__file__).resolve().parents[2]
-CPU_PROFILES = ["config/dev-mac-cpu.yaml", "config/dev-mac-cpu-broadcast.yaml", "config/server-cpu.yaml"]
+# Every profile shipped in this edition (the CPU and GPU repos ship different ones).
+PROFILES = sorted(str(p.relative_to(ROOT)) for p in (ROOT / "config").glob("*.yaml"))
 
 
-@pytest.mark.parametrize("profile", CPU_PROFILES)
+@pytest.mark.parametrize("profile", PROFILES)
 def test_bench_label_matches_benchmark_format(profile):
     """The live page and Grafana look up measured WER by this label, so it must be byte-identical
     to the label `stt bench` records for the same settings."""
