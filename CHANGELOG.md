@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.2.7 — 2026-11-27
+- **Native Windows (GPU edition)**: `scripts/windows/setup.ps1` (venv, locked deps, pinned CUDA 12
+  cuBLAS + cuDNN 9 from pip, models, DB), `live.ps1` (start/stop/status/logs, like `live.sh`),
+  `stream.ps1` (like `make stream`). `live_stt.winsupport` puts pip's NVIDIA DLL folders on the
+  Windows DLL search path. `uv.lock` now also resolves for Windows x86-64 (no version changes).
+  CI: `windows` (unit tests, real UDP ingest, script checks) and `windows-system` (PostgreSQL +
+  Memurai + the whole system until Urdu text is stored) jobs.
+- PyAV 18.1.0 → 18.1.1: 18.1.0 was yanked upstream (double free when decoding audio with custom
+  channel layouts).
+
 ## 0.2.6 — 2026-11-27
 - The "Tested accuracy" card and the Grafana accuracy panel show the WER measured for exactly the
   running FAST configuration (`/ui/config` → `asr.bench_label`; Grafana constant `fast_cfg`), or

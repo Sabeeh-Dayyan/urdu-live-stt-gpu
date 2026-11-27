@@ -4,6 +4,7 @@ import os
 import shutil
 import socket
 import subprocess
+import sys
 import time
 
 import numpy as np
@@ -138,6 +139,7 @@ def _free_port():
     return p
 
 
+@pytest.mark.skipif(sys.platform == "win32", reason="sender loop is a bash script (process groups)")
 def test_udp_live_loss_reconnect_and_loop_discontinuity(media):
     """Real UDP: looping sender (discontinuity per loop), garbage datagrams, sender killed →
     stream_down, restarted → stream_up again. Sender control runs on timer threads because the

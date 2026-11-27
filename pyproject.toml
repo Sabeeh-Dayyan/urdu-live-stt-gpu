@@ -7,8 +7,8 @@ requires-python = ">=3.11,<3.12"
 # Versions verified 2026-11-20 against PyPI. Constraint: must ship wheels for
 # cp311 macOS x86_64 (dev: Intel i9 Mac) AND Linux x86_64 (prod). Exact pins after resolution.
 dependencies = [
-    # Ingest. 18.1.0 = newest PyAV with cp311 wheels (19.x requires Python >=3.12).
-    "av==18.1.0",
+    # Ingest. 18.1.1 = newest PyAV with cp311 wheels (19.x requires Python >=3.12).
+    "av==18.1.1",
     "numpy==2.4.6",                 # 2.5 requires Python >=3.12
     # VAD. 1.23.2 is the last onnxruntime release with macOS x86_64 wheels.
     "onnxruntime==1.23.2",
@@ -53,6 +53,7 @@ no-build-package = ["av", "numpy", "onnxruntime", "ctranslate2", "tokenizers", "
 environments = [
     "sys_platform == 'darwin' and platform_machine == 'x86_64'",
     "sys_platform == 'linux' and platform_machine == 'x86_64'",
+    "sys_platform == 'win32' and platform_machine == 'AMD64'",   # native Windows (GPU edition)
 ]
 
 [tool.pytest.ini_options]

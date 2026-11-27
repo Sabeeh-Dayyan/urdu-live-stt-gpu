@@ -33,6 +33,7 @@ from live_stt.asr.backends.base import (
 )
 from live_stt.logging import get_logger
 from live_stt.settings import AsrConfig, resolve_path
+from live_stt.winsupport import add_cuda_dll_dirs
 
 log = get_logger(__name__)
 SR = 16_000
@@ -58,6 +59,7 @@ class FasterWhisperBackend(ASRBackend):
         self._models: dict[str, object] = {}
         self._batched: dict[str, object] = {}
         self._lock = threading.Lock()
+        add_cuda_dll_dirs()  # native Windows: make pip-installed cuBLAS/cuDNN loadable (no-op elsewhere)
         dev = cfg.device
         if dev == "auto":
             try:

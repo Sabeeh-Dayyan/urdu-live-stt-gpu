@@ -181,7 +181,7 @@ and streaming mode (see the GPU edition); **on GPU it has not been measured yet*
 | 4.5 h soak, looping programme with a timestamp reset every loop | 0 crashes or restarts, **0 lost segments** (1 868 emitted, 1 867 done, 2 in flight at stop). Worker/persister/API memory flat; ASR memory +≈130 MB/h (open issue) |
 | Clock | median drift −50 ms; re-anchors on every discontinuity |
 | Word timestamps vs true speech onsets (file input) | 0.13–0.21 s |
-| Automated tests | 208 unit + integration tests (property-based, real Redis/Postgres, real ffmpeg streams, live UDP, real model end-to-end) |
+| Automated tests | 210 unit + integration tests (property-based, real Redis/Postgres, real ffmpeg streams, live UDP, real model end-to-end) |
 
 ### Capacity
 
@@ -224,6 +224,39 @@ make start        # terminal 2: Docker services + the system, detached (or `make
 make stream URL=127.0.0.1:5101   # point the channel at the test feed (or paste it on the web page)
 open http://localhost:8000
 ```
+
+## Run on Windows (native, no Docker)
+
+Tested in CI on Windows Server 2022 (`windows` and `windows-system` jobs): locked install, unit
+tests, real UDP ingest, and the whole system started with the scripts below until Urdu text is
+stored (CPU decoding there; the runner has no GPU).
+
+**Install once**
+1. **Python 3.11** from python.org (tick "Add python.exe to PATH"; the `py` launcher is used).
+2. **NVIDIA driver** (current Game Ready/Studio or data-centre driver). The CUDA 12 cuBLAS and
+   cuDNN 9 libraries are installed by the setup script from pip; no CUDA toolkit needed.
+3. **PostgreSQL 16** (EDB installer; includes the `pg_trgm` extension) as a Windows service.
+4. **Redis-compatible server**: [Memurai](https://www.memurai.com/) (Windows service, Redis 7
+   API), or Redis in WSL/Docker on port 6379.
+5. **ffmpeg** only if you want to send test streams (`winget install Gyan.FFmpeg`); the app
+   itself uses the FFmpeg bundled in PyAV.
+
+**Set up and run** (PowerShell in the repo folder; `Set-ExecutionPolicy -Scope Process Bypass` first if scripts are blocked):
+
+```powershell
+scripts\windows\setup.ps1 -CreateDb             # .venv, pinned deps + CUDA libs, models, DB user/tables
+scripts\windows\live.ps1 start                  # background start (config\prod-gpu.yaml) → http://localhost:8000
+scripts\windows\stream.ps1 udp://@239.1.1.1:5000  # enter the stream link (or paste it on the web page)
+scripts\windows\live.ps1 status | logs | stop | restart
+```
+
+| | Windows notes |
+|---|---|
+| Multicast / unicast | Allow the UDP port in Windows Defender Firewall (`stream.ps1` prints the exact command). For multicast the PC must be on the feed's network/VLAN. |
+| UDP buffering | PyAV's Windows FFmpeg may not support the receive FIFO (`fifo_size`); CI reports it (`scripts/windows/check_udp_buffer.py`). The large socket buffer (`ingest.buffer_size`, 32 MB in prod-gpu) absorbs bursts. |
+| Stopping | `live.ps1 stop` ends the process tree (Windows has no SIGTERM). Unfinished ASR work stays in Redis and is redelivered on the next start. |
+| CUDA libraries | `live_stt.winsupport` adds pip's `nvidia/*/bin` folders (and `CUDA_PATH\bin`) to the DLL search path, so `device: cuda` finds cuBLAS/cuDNN. |
+| Grafana / Prometheus | optional; install the Windows builds and point them at `infra/` (localhost targets). |
 
 ## Using it
 

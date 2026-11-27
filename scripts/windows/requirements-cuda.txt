@@ -1,0 +1,5 @@
+# NVIDIA runtime libraries for CTranslate2 4.9 on native Windows (it needs CUDA 12 cuBLAS and
+# cuDNN 9; both are ABI-stable within the major version). Newest releases with win_amd64 wheels.
+# live_stt.winsupport adds their site-packages/nvidia/*/bin folders to the DLL search path.
+nvidia-cublas-cu12==12.9.2.10
+nvidia-cudnn-cu12==9.28.1.4

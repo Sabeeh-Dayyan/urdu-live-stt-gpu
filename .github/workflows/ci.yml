@@ -59,3 +59,124 @@ jobs:
           docker run --rm --entrypoint python live-stt:cuda -c "import live_stt.api.app, live_stt.worker, live_stt.asr.service, faster_whisper, av, onnxruntime; print('imports ok')"
       - name: Compose file is valid
         run: cd deploy && cp .env.example .env && docker compose config -q
+
+  windows:
+    # Native Windows, no Docker: locked install, unit tests, real UDP ingest through PyAV's FFmpeg,
+    # and the PowerShell helper scripts (parsed by Windows PowerShell 5.1 and pwsh).
+    runs-on: windows-2022
+    timeout-minutes: 40
+    env:
+      PYTHONPATH: src;.
+      PYTHONUTF8: "1"
+    defaults:
+      run: {shell: pwsh}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+        with: {version: "0.13.9"}
+      - name: Python env (locked, same uv.lock as Linux)
+        run: |
+          uv python install 3.11
+          uv sync --frozen --no-editable --extra bench --python 3.11
+      - name: ffmpeg (test streams and UDP sender)
+        run: choco install ffmpeg -y --no-progress
+      - name: VAD model (pinned + verified)
+        run: |
+          New-Item -ItemType Directory -Force models | Out-Null
+          Invoke-WebRequest -UseBasicParsing -OutFile models/silero_vad.onnx https://github.com/snakers4/silero-vad/raw/v6.2/src/silero_vad/data/silero_vad.onnx
+          if ((Get-FileHash models/silero_vad.onnx -Algorithm SHA256).Hash -ne "1A153A22F4509E292A94E67D6F9B85E8DEB25B4988682B7E174C65279D8788E3") { throw "VAD model hash mismatch" }
+      - name: Test stream (MPEG-TS from the committed reference audio)
+        shell: bash
+        run: mkdir -p testbed/media && testbed/make_ts.sh testbed/reference/fleurs_ur.wav testbed/media/fleurs_ur.ts
+      - name: Imports (CTranslate2 / PyAV / onnxruntime Windows wheels)
+        run: .venv\Scripts\python -c "import live_stt.winsupport as w; w.add_cuda_dll_dirs(); import ctranslate2, av, onnxruntime, faster_whisper, live_stt.api.app, live_stt.worker, live_stt.asr.service, live_stt.supervisor; print('ctranslate2', ctranslate2.__version__, '| av', av.__version__, '| cuda devices', ctranslate2.get_cuda_device_count())"
+      - name: Unit tests
+        run: .venv\Scripts\python -m pytest -q -p no:cacheprovider tests/unit
+      - name: Real UDP and file ingest through PyAV (Windows FFmpeg build)
+        run: .venv\Scripts\python -m pytest -q -p no:cacheprovider -rs tests/integration/test_source_media.py
+      - name: UDP receive buffer support in PyAV's FFmpeg (report)
+        run: .venv\Scripts\python scripts/windows/check_udp_buffer.py | Tee-Object -Append -FilePath $env:GITHUB_STEP_SUMMARY
+      - name: PowerShell scripts parse (Windows PowerShell 5.1)
+        shell: powershell
+        run: |
+          foreach ($f in Get-ChildItem scripts\windows\*.ps1) {
+            $err = $null; [System.Management.Automation.Language.Parser]::ParseFile($f.FullName, [ref]$null, [ref]$err) | Out-Null
+            if ($err) { $err | ForEach-Object { Write-Error "$($f.Name): $_" }; exit 1 }
+            "parsed $($f.Name)"
+          }
+      - name: stream.ps1 link normalisation (Windows PowerShell 5.1)
+        shell: powershell
+        run: |
+          $cases = @{ "239.1.1.1:5000" = "udp://@239.1.1.1:5000"; "@239.1.1.1:5000" = "udp://@239.1.1.1:5000";
+                      "10.0.0.5:1234" = "udp://10.0.0.5:1234"; "udp://0.0.0.0:5000" = "udp://0.0.0.0:5000";
+                      "srt://host:9000" = "srt://host:9000" }
+          foreach ($k in $cases.Keys) {
+            $got = & .\scripts\windows\stream.ps1 $k -DryRun
+            if ($got -ne $cases[$k]) { throw "stream.ps1 '$k' -> '$got', expected '$($cases[$k])'" }
+            "$k -> $got"
+          }
+
+  windows-system:
+    # The whole system on native Windows: PostgreSQL + Memurai (Redis-compatible) services, the
+    # supervisor started by scripts\windows\live.ps1, a looping UDP feed, CPU decoding with the
+    # pinned turbo model, until Urdu text is stored. (No GPU on the runner.)
+    runs-on: windows-2022
+    timeout-minutes: 50
+    env:
+      PYTHONUTF8: "1"
+    defaults:
+      run: {shell: pwsh}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+        with: {version: "0.13.9"}
+      - name: Python env (locked)
+        run: |
+          uv python install 3.11
+          uv sync --frozen --no-editable --python 3.11
+      - name: ffmpeg + Memurai (Redis-compatible server for Windows)
+        run: choco install ffmpeg memurai-developer -y --no-progress
+      - name: PostgreSQL service, user and database
+        run: |
+          $svc = Get-Service -Name "postgresql*" | Select-Object -First 1
+          Set-Service -Name $svc.Name -StartupType Manual; Start-Service -Name $svc.Name
+          $env:PGPASSWORD = "root"
+          & "$env:PGBIN\psql.exe" -U postgres -h localhost -c "CREATE USER stt WITH PASSWORD 'stt'"
+          & "$env:PGBIN\psql.exe" -U postgres -h localhost -c "CREATE DATABASE stt OWNER stt"
+      - name: Redis-compatible server answers
+        run: |
+          for ($i = 0; $i -lt 30; $i++) { $c = New-Object Net.Sockets.TcpClient; try { $c.Connect("127.0.0.1", 6379); "port 6379 open"; break } catch { Start-Sleep 2 } finally { $c.Close() } }
+          .venv\Scripts\python -c "import redis; print('redis ping', redis.Redis().ping(), redis.Redis().info()['redis_version'])"
+      - name: Models (pinned revisions, SHA-256 verified) and tables
+        env: {PYTHONPATH: src}
+        run: |
+          .venv\Scripts\python -m live_stt.cli download-models -c config/dev-mac-cpu.yaml
+          if ($LASTEXITCODE) { exit 1 }
+          .venv\Scripts\python -m live_stt.cli migrate -c config/dev-mac-cpu.yaml
+          if ($LASTEXITCODE) { exit 1 }
+      - name: Looping UDP test feed on 127.0.0.1:5101
+        shell: bash
+        run: |
+          mkdir -p testbed/media && testbed/make_ts.sh testbed/reference/fleurs_ur.wav testbed/media/fleurs_ur.ts
+          nohup ffmpeg -nostdin -loglevel error -re -stream_loop -1 -i testbed/media/fleurs_ur.ts -c copy -f mpegts "udp://127.0.0.1:5101?pkt_size=1316" > /dev/null 2>&1 &
+      - name: Start with scripts\windows\live.ps1, wait for Urdu text
+        run: |
+          .\scripts\windows\live.ps1 start config\dev-mac-cpu.yaml
+          .\scripts\windows\stream.ps1 udp://127.0.0.1:5101
+          $rows = @()
+          for ($i = 0; $i -lt 90 -and $rows.Count -eq 0; $i++) {
+            Start-Sleep 5
+            try { $rows = @(Invoke-RestMethod "http://localhost:8000/channels/ch1/transcripts?limit=5") } catch { }
+          }
+          .\scripts\windows\live.ps1 status
+          if ($rows.Count -eq 0) { Get-Content var\log\live.log -Tail 80; throw "no transcript within 7.5 min" }
+          "transcribed segments: $($rows.Count); delay of newest: $($rows[0].latency_s) s"
+          $rows[0].text_raw | Out-File -Encoding utf8 transcript_sample.txt
+          "Windows system test: $($rows.Count) segments stored, newest delay $([math]::Round($rows[0].latency_s, 1)) s" >> $env:GITHUB_STEP_SUMMARY
+          (Invoke-RestMethod "http://localhost:8000/health").status
+      - name: Stop
+        if: always()
+        run: .\scripts\windows\live.ps1 stop
+      - name: Logs
+        if: failure()
+        run: Get-Content var\log\live.log, var\log\live.err.log -Tail 200 -ErrorAction SilentlyContinue
