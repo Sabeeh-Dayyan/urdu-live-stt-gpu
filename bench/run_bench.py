@@ -18,7 +18,6 @@ from __future__ import annotations
 import json
 import os
 import platform
-import resource
 import time
 from dataclasses import asdict, dataclass, replace
 from pathlib import Path
@@ -50,6 +49,17 @@ class Cfg:
     def label(self) -> str:
         p = f" pack{self.pack:g}" if self.pack else ""
         return f"{self.model} {self.compute} b{self.beam} seg{self.max_seg:g} t{self.threads}{p}"
+
+
+
+def peak_rss_mb() -> float | None:
+    """Peak resident memory of this process (None on Windows: no `resource` module)."""
+    try:
+        import resource
+    except ImportError:
+        return None
+    rss = resource.getrusage(resource.RUSAGE_SELF).ru_maxrss  # bytes on macOS, KiB on Linux
+    return rss / (1024 * 1024) if platform.system() == "Darwin" else rss / 1024
 
 
 T, L = "large-v3-turbo", "large-v3"
@@ -179,9 +189,7 @@ def run_config(cfg: Cfg, s: Settings, audio, ref, backends: dict) -> dict:
         "ts_err_p50": float(np.percentile(ts_err, 50)) if ts_err else None,
         "ts_err_p95": float(np.percentile(ts_err, 95)) if ts_err else None,
         "cpu_util": cpu / max(wall, 1e-6),
-        "peak_rss_mb": resource.getrusage(resource.RUSAGE_SELF).ru_maxrss / (1024 * 1024)
-        if platform.system() == "Darwin" else
-        resource.getrusage(resource.RUSAGE_SELF).ru_maxrss / 1024,
+        "peak_rss_mb": peak_rss_mb(),
         "hyp_sample": " | ".join(h for h in hyps_g[:3] if h)[:300],
     }
 

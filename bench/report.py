@@ -83,7 +83,7 @@ def write_report(result_files: list[Path], dst: Path, settings=None, live_file=N
             f"{_f(r['latency_sim_p50'], 2)} / {_f(r['latency_sim_p95'], 2)} | "
             f"{_f(r['halluc_rate'], pct=True)} / {_f(r['halluc_rate_noguard'], pct=True)} | "
             f"{_f(r['ts_err_p50'], 2)} / {_f(r['ts_err_p95'], 2)} | {r['segments']} | "
-            f"{r['peak_rss_mb']:.0f} |")
+            f"{_f(r.get('peak_rss_mb'), 0)} |")
     L.append("")
     d = decide(runs, margin)
     if d:
