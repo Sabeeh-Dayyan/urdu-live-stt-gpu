@@ -162,7 +162,7 @@ class GuardsConfig(_Model):
 
 
 class BusConfig(_Model):
-    redis_url: str = "redis://localhost:6379/0"
+    redis_url: str = "redis://127.0.0.1:6379/0"
     maxlen: int = 100_000
     # Request streams carry audio; entries are deleted after ack, this is only a safety cap.
     request_maxlen: int = 5_000
@@ -174,7 +174,7 @@ class BusConfig(_Model):
 
 
 class DbConfig(_Model):
-    dsn: str = "postgresql://stt:stt@localhost:5432/stt"
+    dsn: str = "postgresql://stt:stt@127.0.0.1:5432/stt"
     flush_ms: int = 200
     flush_rows: int = 100
 

@@ -69,12 +69,12 @@ guards:
   blocklist_path: config/hallucination_blocklist.txt
 
 bus:
-  redis_url: redis://localhost:6379/0
+  redis_url: redis://127.0.0.1:6379/0
   maxlen: 100000
   request_maxlen: 5000
 
 db:
-  dsn: postgresql://stt:stt@localhost:5432/stt
+  dsn: postgresql://stt:stt@127.0.0.1:5432/stt
   flush_ms: 200
   flush_rows: 100
 

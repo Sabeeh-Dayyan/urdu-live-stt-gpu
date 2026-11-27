@@ -12,7 +12,7 @@
 param(
   [Parameter(Mandatory = $true, Position = 0)][string]$Url,
   [Parameter(Position = 1)][string]$Channel = "ch1",
-  [string]$Api = $(if ($env:API) { $env:API } else { "http://localhost:8000" }),
+  [string]$Api = $(if ($env:API) { $env:API } else { "http://127.0.0.1:8000" }),
   [switch]$DryRun
 )
 $ErrorActionPreference = "Stop"

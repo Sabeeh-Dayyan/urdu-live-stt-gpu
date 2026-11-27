@@ -22,7 +22,7 @@ $PidFile = Join-Path $Root "run\live.pid"
 $CfgFile = Join-Path $Root "run\live.config"
 $Log = Join-Path $Root "var\log\live.log"
 $ErrLog = Join-Path $Root "var\log\live.err.log"
-$Api = "http://localhost:8000"
+$Api = "http://127.0.0.1:8000"   # not "localhost": Windows tries IPv6 first and a refused ::1 costs ~2 s
 New-Item -ItemType Directory -Force (Join-Path $Root "run"), (Join-Path $Root "var\log") | Out-Null
 $env:PYTHONPATH = Join-Path $Root "src"
 
@@ -37,7 +37,14 @@ function Test-Port([int]$Port) {
   try { $c.Connect("127.0.0.1", $Port); return $true } catch { return $false } finally { $c.Close() }
 }
 function Get-Health {
-  try { return Invoke-RestMethod -Uri "$Api/health" -TimeoutSec 3 } catch { return $null }
+  # /health answers 503 with the same JSON when Redis or the database is unhealthy; show that too.
+  try { return Invoke-RestMethod -Uri "$Api/health" -TimeoutSec 10 }
+  catch {
+    if ($_.ErrorDetails -and $_.ErrorDetails.Message) {
+      try { return ($_.ErrorDetails.Message | ConvertFrom-Json) } catch { }
+    }
+    return $null
+  }
 }
 
 function Show-Status {
@@ -53,7 +60,8 @@ function Show-Status {
       Write-Host ("  {0,-14} alive={1} restarts={2}" -f $p.Name, $p.Value.alive, $p.Value.restarts)
     }
   }
-  Write-Host "  UI       $Api"
+  if ($h.status -ne "ok") { Write-Host "  DEGRADED: $($h.redis_error) (check the PostgreSQL / Redis services)" -ForegroundColor Yellow }
+  Write-Host "  UI       http://localhost:8000"
   Write-Host "  Grafana  http://localhost:3000/d/live-stt  (if installed)"
   Write-Host "  logs     $Log"
 }

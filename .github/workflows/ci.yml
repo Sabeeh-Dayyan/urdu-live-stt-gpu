@@ -166,14 +166,16 @@ jobs:
           $rows = @()
           for ($i = 0; $i -lt 90 -and $rows.Count -eq 0; $i++) {
             Start-Sleep 5
-            try { $rows = @(Invoke-RestMethod "http://localhost:8000/channels/ch1/transcripts?limit=5") } catch { }
+            try { $rows = @(Invoke-RestMethod "http://127.0.0.1:8000/channels/ch1/transcripts?limit=5" | ForEach-Object { $_ }) } catch { }
           }
           .\scripts\windows\live.ps1 status
           if ($rows.Count -eq 0) { Get-Content var\log\live.log -Tail 80; throw "no transcript within 7.5 min" }
           "transcribed segments: $($rows.Count); delay of newest: $($rows[0].latency_s) s"
           $rows[0].text_raw | Out-File -Encoding utf8 transcript_sample.txt
-          "Windows system test: $($rows.Count) segments stored, newest delay $([math]::Round($rows[0].latency_s, 1)) s" >> $env:GITHUB_STEP_SUMMARY
-          (Invoke-RestMethod "http://localhost:8000/health").status
+          "Windows system test: $($rows.Count) segments stored, newest delay $([math]::Round([double]$rows[0].latency_s, 1)) s" >> $env:GITHUB_STEP_SUMMARY
+          $h = Invoke-RestMethod "http://127.0.0.1:8000/health"
+          "health: $($h.status) (redis $($h.redis), db $($h.db))"
+          if ($h.status -ne "ok") { throw "health is $($h.status)" }
       - name: Stop
         if: always()
         run: .\scripts\windows\live.ps1 stop
